@@ -20,15 +20,24 @@
 | `BTC_4h_RELVP.csv` | Generated feature data — 21,066 rows, 2016-06 to 2026-02 |
 | `BTC_4h_RELVP_metadata.json` | Metadata: parameters, column names, bin edges |
 
+### Phase 2 files (complete)
+| Path | Purpose |
+|------|---------|
+| `src/features/__main__.py` | CLI: `python3 -m src.features prepare\|check` |
+| `src/features/pipeline.py` | Load CSV, compute derived features (log_return, bar_range, bar_body, volume_ratio) |
+| `src/features/dataset.py` | TimeSeriesDataset (configurable lookback), time-based splits, label generation |
+
+### Phase 3 files (in progress)
+| Path | Purpose |
+|------|---------|
+| `src/models/__main__.py` | CLI: `python3 -m src.models train\|evaluate <run_id>` |
+| `src/models/architecture.py` | RNNClassifier (configurable layers/nodes/activation) |
+| `src/models/trainer.py` | Training loop with early stopping + checkpointing |
+| `src/models/evaluate.py` | Accuracy, precision, recall, F1, confusion matrix |
+
 ### Planned files (future phases)
 | Path | Phase | Purpose |
 |------|-------|---------|
-| `src/features/indicators.py` | 2 | Technical indicator functions |
-| `src/features/pipeline.py` | 2 | Feature pipeline orchestrator |
-| `src/features/dataset.py` | 2 | PyTorch Dataset class |
-| `src/models/architecture.py` | 3 | Model definition |
-| `src/models/trainer.py` | 3 | Training loop |
-| `src/models/evaluate.py` | 3 | Evaluation metrics |
 | `src/models/backtest.py` | 3 | Backtesting framework |
 | `src/trading/kraken_client.py` | 4 | Kraken API wrapper |
 | `src/trading/data_feed.py` | 4 | Real-time data feed |
@@ -70,6 +79,26 @@
 | `LOOKBACK_DAYS` | 180 | VP computation lookback |
 | `REL_SPAN_PCT` | 0.25 | VP price range (±25%) |
 | `REL_BIN_COUNT` | 50 | VP histogram bins |
+
+### Feature engineering
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `LOOKBACK_BARS_MODEL` | 42 | Model input window (42 bars = 1 week) |
+| `VOLUME_ROLL_WINDOW_DAYS` | 30 | Rolling volume normalization window |
+| `TRAIN_END` | `2023-01-01` | Train/val split boundary |
+| `VAL_END` | `2024-01-01` | Val/test split boundary |
+| `LABEL_HORIZON_BARS` | 6 | Lookahead for label (24h) |
+
+### RNN model
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `RNN_HIDDEN_SIZES` | `[64, 32, 16]` | Hidden nodes per layer (decreasing) |
+| `RNN_DROPOUT` | 0.2 | Dropout between layers |
+| `RNN_ACTIVATION` | `tanh` | Activation function |
+| `LEARNING_RATE` | 1e-3 | Adam learning rate |
+| `EPOCHS` | 50 | Max training epochs |
+| `BATCH_SIZE` | 64 | Training batch size |
+| `EARLY_STOP_PATIENCE` | 10 | Epochs without val improvement before stopping |
 
 ### Kraken trading
 | Parameter | Value | Notes |

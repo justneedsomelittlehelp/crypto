@@ -24,8 +24,8 @@
 | Phase | Title | Status |
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
-| 2 | Feature Engineering | Not started |
-| 3 | ML Model Development | Not started |
+| 2 | Feature Engineering | **Complete** |
+| 3 | ML Model Development | **In progress** |
 | 4 | Kraken API Integration | Not started |
 | 5 | Trading Strategy & Execution Engine | Not started |
 | 6 | Live Trading & Monitoring | Not started |
