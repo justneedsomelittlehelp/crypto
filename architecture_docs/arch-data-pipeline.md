@@ -1,0 +1,85 @@
+# Data Pipeline
+
+> **Read this when working on:** data collection, OHLCV scraping, volume profile computation, feature data generation
+> **Related docs:** [arch-ml-model.md](arch-ml-model.md) (consumes pipeline output), [arch-reference.md](arch-reference.md) (data schema)
+
+---
+
+## Overview
+
+The data pipeline collects BTC/USD OHLCV candles from multiple exchanges, merges them into a unified price series, and computes relative volume profiles (VP) that serve as the primary feature for the ML model.
+
+## Data Sources
+
+- **Exchanges**: Bitstamp and Coinbase (via ccxt library)
+- **Symbol**: BTC/USD
+- **Timeframe**: 4h candles
+- **History start**: 2016-01-01
+- **Merge strategy**: outer join on timestamp; prices averaged across exchanges (non-zero only), volume summed
+
+### Why multiple exchanges?
+Single-exchange data has gaps and volume skew. Merging Bitstamp + Coinbase gives more complete coverage and a more representative volume signal. Additional exchanges can be added to the `EXCHANGES` config list.
+
+## Relative Volume Profile (VP)
+
+The core feature: a 50-bin histogram of where volume traded relative to the current price, over a lookback window.
+
+### How it works
+For each 4h candle at time `t`:
+1. Take the past 180 days (1,080 bars) of candles
+2. For each historical candle `j`, compute `x_j = log(close_j / close_t)` — the log-return distance from current price
+3. Bin these distances into 50 equally-spaced bins on the log axis, spanning ±25% from current price
+4. Weight each bin by the volume at that bar
+5. Normalize so the histogram sums to 1.0
+
+### What the VP tells the model
+- **Peaks** in the VP = price levels where heavy volume traded (support/resistance zones)
+- **Symmetry** of the VP = whether more volume is above or below current price
+- **Spread** = how dispersed recent trading activity is around current price
+
+### Key parameters
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| `LOOKBACK_DAYS` | 180 | History window for VP computation |
+| `REL_SPAN_PCT` | 0.25 | ±25% price range around current close |
+| `REL_BIN_COUNT` | 50 | Number of histogram bins |
+| `REL_NORMALIZE` | True | Histogram sums to 1.0 |
+
+### Column naming
+VP columns: `vp_rel_00` through `vp_rel_49`
+- Bin 00 = lowest price bucket (−25% from current)
+- Bin 25 = center (current price)
+- Bin 49 = highest price bucket (+25% from current)
+
+## Data Flow
+
+```
+Bitstamp API ──┐
+               ├── merge (outer join) ── compute VP ── feature CSV
+Coinbase API ──┘
+```
+
+**Implementation** (refactored in Phase 1):
+- `src/config.py` — all pipeline parameters centralized
+- `src/data/scraper.py` — `fetch_all_ohlcv()` per exchange, `merge_exchanges()`, `fetch_and_merge()` orchestrator
+- `src/data/volume_profile.py` — `compute_relative_vp()`, `save_results()`
+- `src/data/validator.py` — `validate()` checks gaps, prices, VP normalization
+- `src/data/__main__.py` — CLI: `python3 -m src.data scrape|validate`
+
+**Original script**: `final_log_scraper.py` (kept for reference, all logic now in `src/`)
+
+## Output Format
+
+CSV file (`BTC_4h_RELVP.csv`) with columns:
+- `ts` — Unix timestamp in milliseconds
+- `date` — ISO 8601 datetime (UTC)
+- `open`, `high`, `low`, `close` — merged OHLC prices
+- `volume_4h` — merged volume (sum across exchanges)
+- `vp_rel_00` ... `vp_rel_49` — relative VP histogram (50 bins)
+
+## Edge Cases & Gotchas
+
+- **First 1,080 rows are discarded** — VP requires a full lookback window, so the first 180 days of data have no VP values
+- **Zero-volume bins** — some VP bins will be zero if no trading happened in that price range; this is expected, not an error
+- **Exchange downtime** — if one exchange has no data for a timestamp, the merge uses the other exchange's price (not averaged). Volume from the missing exchange is 0 for that bar
+- **Partial candles** — the last candle in a live data pull may be incomplete (candle hasn't closed yet). The scraper doesn't handle this; the real-time data feed (Phase 4) must
