@@ -9,13 +9,10 @@ Phase 2 — feature engineering pipeline, PyTorch Dataset, train/val/test splits
 ## Implementation Steps
 
 1. **Define model architecture** (`src/models/architecture.py`)
-   - Architecture depends on the user's strategy and signal type
-   - Common starting points for time-series financial data:
-     - **LSTM/GRU**: good baseline for sequential patterns
-     - **Transformer**: better at capturing long-range dependencies in VP data
-     - **1D CNN + LSTM hybrid**: fast local pattern extraction + temporal modeling
-   - The 50-bin VP vector per timestep is naturally suited to attention or conv layers
-   - Start simple (LSTM), iterate toward complexity only if justified by validation metrics
+   - ~~Vanilla RNN~~ — exhausted, 4 evals, ~50% accuracy (random)
+   - ~~LSTM~~ — exhausted, 7 evals, best 53.5% val acc but didn't generalize
+   - **1D CNN** — next, treats VP as spatial signal matching user's strategy
+   - Key insight: user reads VP as a histogram shape (peaks = support/resistance), not a time series. Sequential models (RNN/LSTM) are the wrong paradigm. See `experiments/STRATEGY.md`
 
 2. **Training loop** (`src/models/trainer.py`)
    - Standard PyTorch training: DataLoader, optimizer (Adam), loss function, LR scheduler

@@ -11,14 +11,22 @@ import sys
 from src.config import BATCH_SIZE, LOOKBACK_BARS_MODEL, EXPERIMENTS_DIR
 from src.features.pipeline import build_feature_matrix
 from src.features.dataset import create_splits, get_dataloaders
-from src.models.architecture import RNNClassifier
+from src.models.architecture import RNNClassifier, LSTMClassifier, CNNClassifier, TransformerClassifier
 from src.models.trainer import train_model
 from src.models.evaluate import evaluate, print_results
 
 import torch
 
 
-def cmd_train():
+MODELS = {
+    "rnn": RNNClassifier,
+    "lstm": LSTMClassifier,
+    "cnn": CNNClassifier,
+    "transformer": TransformerClassifier,
+}
+
+
+def cmd_train(model_name: str = "rnn"):
     print("Loading data...")
     df = build_feature_matrix()
     train_df, val_df, test_df = create_splits(df)
@@ -31,7 +39,8 @@ def cmd_train():
     print(f"Train: {len(train_loader.dataset)} samples")
     print(f"Val:   {len(val_loader.dataset)} samples")
 
-    model = RNNClassifier()
+    model_cls = MODELS[model_name]
+    model = model_cls()
     print(f"\nModel: {model.__class__.__name__}")
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {total_params:,}\n")
@@ -81,8 +90,16 @@ def main():
 
     command = sys.argv[1]
 
+    model_name = "rnn"
+    if "--model" in sys.argv:
+        idx = sys.argv.index("--model")
+        model_name = sys.argv[idx + 1]
+        if model_name not in MODELS:
+            print(f"Unknown model: {model_name}. Options: {list(MODELS.keys())}")
+            sys.exit(1)
+
     if command == "train":
-        cmd_train()
+        cmd_train(model_name)
     elif command == "evaluate":
         if len(sys.argv) < 3:
             print("Usage: python -m src.models evaluate <run_id>")

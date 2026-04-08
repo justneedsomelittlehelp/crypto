@@ -30,10 +30,18 @@
 ### Phase 3 files (in progress)
 | Path | Purpose |
 |------|---------|
-| `src/models/__main__.py` | CLI: `python3 -m src.models train\|evaluate <run_id>` |
-| `src/models/architecture.py` | RNNClassifier (configurable layers/nodes/activation) |
-| `src/models/trainer.py` | Training loop with early stopping + checkpointing |
+| `src/models/__main__.py` | CLI: `python3 -m src.models train --model rnn\|lstm\|cnn` |
+| `src/models/architecture.py` | RNNClassifier, LSTMClassifier, CNNClassifier |
+| `src/models/trainer.py` | Training loop with early stopping, checkpointing, weighted loss |
 | `src/models/evaluate.py` | Accuracy, precision, recall, F1, confusion matrix |
+| `src/models/walk_forward.py` | Walk-forward retraining (10 folds, 2020-2025) |
+| `src/models/rule_based.py` | Rule-based strategy backtest (no ML) |
+| `experiments/STRATEGY.md` | User's trading strategy and model iteration reasoning |
+| `experiments/EVAL_VANILLA_RNN.md` | Vanilla RNN eval log (4 evals, exhausted) |
+| `experiments/EVAL_LSTM.md` | LSTM eval log (7 evals, exhausted) |
+| `experiments/EVAL_CNN.md` | **1D CNN eval log (26 evals, best: Eval 23 at 61.5%)** |
+| `experiments/EVAL_TRANSFORMER.md` | Transformer eval log (2 evals, 61.3% / 67.2% precision) |
+| `experiments/RUN_INDEX.md` | Maps every run_* folder to its eval number |
 
 ### Planned files (future phases)
 | Path | Phase | Purpose |
@@ -83,11 +91,12 @@
 ### Feature engineering
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `LOOKBACK_BARS_MODEL` | 42 | Model input window (42 bars = 1 week) |
+| `LOOKBACK_BARS_MODEL` | 180 | Model input window (180 bars = 30 days) |
 | `VOLUME_ROLL_WINDOW_DAYS` | 30 | Rolling volume normalization window |
 | `TRAIN_END` | `2023-01-01` | Train/val split boundary |
 | `VAL_END` | `2024-01-01` | Val/test split boundary |
 | `LABEL_HORIZON_BARS` | 6 | Lookahead for label (24h) |
+| `VP_STRUCTURE_COLS` | 7 cols | VP ceiling/floor dist, strength, consistency, num_peaks |
 
 ### RNN model
 | Parameter | Default | Description |
@@ -95,7 +104,17 @@
 | `RNN_HIDDEN_SIZES` | `[64, 32, 16]` | Hidden nodes per layer (decreasing) |
 | `RNN_DROPOUT` | 0.2 | Dropout between layers |
 | `RNN_ACTIVATION` | `tanh` | Activation function |
-| `LEARNING_RATE` | 1e-3 | Adam learning rate |
+
+### LSTM model
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `LSTM_HIDDEN_SIZES` | `[8]` | Hidden nodes per layer |
+| `LSTM_DROPOUT` | 0.0 | Dropout between layers |
+
+### Training
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `LEARNING_RATE` | 1e-4 | Adam learning rate |
 | `EPOCHS` | 50 | Max training epochs |
 | `BATCH_SIZE` | 64 | Training batch size |
 | `EARLY_STOP_PATIENCE` | 10 | Epochs without val improvement before stopping |

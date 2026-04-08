@@ -29,8 +29,14 @@ def train_model(
     run_dir = EXPERIMENTS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Compute class weight from training data to counter majority-class collapse
+    all_labels = torch.cat([y for _, y in train_loader])
+    n_pos = all_labels.sum().item()
+    n_neg = len(all_labels) - n_pos
+    pos_weight = torch.tensor([n_neg / n_pos]) if n_pos > 0 else torch.tensor([1.0])
+
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     best_val_loss = float("inf")
     epochs_no_improve = 0

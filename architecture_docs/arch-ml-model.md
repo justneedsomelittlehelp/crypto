@@ -7,31 +7,60 @@
 
 ## Overview
 
-PyTorch model that takes historical features (VP + technical indicators) and outputs trading signals. The user owns the strategy and model design — this doc describes the infrastructure around it.
+PyTorch model that takes historical features (VP + derived) and outputs trading signals. The user owns the strategy — see `experiments/STRATEGY.md` for the full strategy-to-model translation.
 
 ## Input Shape
 
-Per timestep, the model receives **54 features**:
+Per timestep, the model receives **61 features**:
 - **50 VP bins** — the relative volume profile (primary feature, no scaling)
-- **4 derived features** — `log_return`, `bar_range`, `bar_body`, `volume_ratio` (scale-invariant, no scaler needed)
+- **4 derived features** — `log_return`, `bar_range`, `bar_body`, `volume_ratio` (scale-invariant)
+- **7 VP structure features** — `vp_ceiling_dist`, `vp_floor_dist`, `vp_num_peaks`, `vp_ceiling_strength`, `vp_floor_strength`, `vp_ceiling_consistency`, `vp_floor_consistency`
 
 No technical indicators — user's thesis is that VP alone carries the signal.
 
-Input shape: `(batch, 42, 54)` — 42 bars (1 week) lookback, 54 features per bar. Lookback is configurable via `LOOKBACK_BARS_MODEL`.
+Input shape: `(batch, 180, 61)` — 180 bars (30 days) lookback, 61 features per bar. Lookback is configurable via `LOOKBACK_BARS_MODEL`.
 
-## Current Model: RNN
+## VP Structure Features
 
-Stacked RNN layers with decreasing hidden sizes: `54 → 64 → 32 → 16 → 1`
-- 3 RNN layers (each a separate `nn.RNN` to allow different sizes)
-- tanh activation, 0.2 dropout between layers
-- Last timestep's hidden state → linear → logit
-- BCEWithLogitsLoss for binary classification
-- **Label**: 1 if price up 24h later, 0 otherwise
+Derived from the user's actual trading strategy (see `experiments/STRATEGY.md`):
+1. **Aggregated VP** — sum 50 VP bins across 30d window, smooth with Gaussian filter (sigma=2)
+2. **Peak detection** — `scipy.signal.find_peaks` on smoothed profile (prominence=0.15, distance=3)
+3. **Ceiling/floor** — nearest peak above/below mid-bin (bin 25 = current price), distance normalized 0-1
+4. **Peak consistency** — check if same peaks appear in shifted 30d windows (3d, 6d, 9d back). Higher = more robust level
 
-### Baseline Results (RNN)
-- ~52% test accuracy (near random — expected for vanilla RNN on financial data)
-- Model biases toward predicting UP
-- Next: try LSTM, Transformer, CNN, or Markov chain
+## Models
+
+### RNN (baseline, exhausted)
+- Stacked RNN layers: `54 → 64 → 32 → 16 → 1`, tanh, dropout 0.2
+- **Result:** ~50% accuracy across all hyperparameter combinations. Majority-class collapse.
+- **Why it failed:** Sequential processing of raw VP bins — no concept of VP as a spatial shape
+- See `experiments/EVAL_VANILLA_RNN.md` (4 evals)
+
+### LSTM (exhausted)
+- Single/stacked LSTM layers, various hidden sizes [8] to [64,32,16]
+- Weighted BCEWithLogitsLoss to fix majority-class collapse
+- **Result:** Best val acc 53.5%, but didn't generalize to test set
+- **Why it failed:** Even with VP structure features, LSTM processes temporally not spatially. VP ceiling/floor features get diluted across 180 timesteps
+- See `experiments/EVAL_LSTM.md` (7 evals)
+
+### 1D CNN (best walk-forward: 61.5%)
+- Treats 50-bin VP profile as a spatial signal (like a 1D image)
+- Conv filters learn smoothing + peak detection from data
+- Best config: Conv1d(1→4, k=5) × 2, flatten, FC(215→16→1), 3,581 params
+- Gaussian smoothing sigma=0.8, prominence=0.05 for VP peak detection
+- See `experiments/EVAL_CNN.md` (26 evals across 8 phases)
+
+### Transformer (61.3% walk-forward, 67.2% precision)
+- Self-attention across 50 VP bins — each bin attends to all others
+- Can learn peak-pair relationships (ceiling/floor) directly
+- Best config: embed=16, 2 heads, 1 layer, FC(31→32→1), 4,113 params
+- Matches CNN accuracy with higher precision
+- See `experiments/EVAL_TRANSFORMER.md` (2 evals)
+
+### Key findings across all models
+- **Label design matters most:** First-hit labels with regime-adaptive TP/SL was the biggest improvement (+15% over fixed horizon)
+- **Architecture matters less:** CNN and Transformer both hit ~61% — the ceiling is regime transitions, not model capacity
+- **Next direction:** 1h data (6x more samples) could break the ceiling, especially for Transformer
 
 ## Training Principles
 

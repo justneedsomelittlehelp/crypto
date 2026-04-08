@@ -70,13 +70,26 @@ def output_meta_name() -> str:
 # =================================================================
 # Feature engineering configuration
 # =================================================================
-LOOKBACK_BARS_MODEL = 42                    # Model input window (42 bars = 1 week at 4h timeframe)
+LOOKBACK_BARS_MODEL = 180                   # Model input window (180 bars = 30 days at 4h timeframe)
 VOLUME_ROLL_WINDOW_DAYS = 30                # Rolling window for volume normalization
 VOLUME_ROLL_WINDOW_BARS = VOLUME_ROLL_WINDOW_DAYS * BARS_PER_DAY
 
 # Derived feature column names
-DERIVED_FEATURE_COLS = ["log_return", "bar_range", "bar_body", "volume_ratio"]
-FEATURE_COLS = VP_COL_NAMES + DERIVED_FEATURE_COLS
+DERIVED_FEATURE_COLS = [
+    "log_return", "bar_range", "bar_body", "volume_ratio",
+    "upper_wick", "lower_wick", "body_dir",
+]
+VP_STRUCTURE_COLS = [
+    "vp_ceiling_dist",
+    "vp_floor_dist",
+    "vp_num_peaks",
+    "vp_ceiling_strength",
+    "vp_floor_strength",
+    "vp_ceiling_consistency",
+    "vp_floor_consistency",
+    "vp_mid_range",
+]
+FEATURE_COLS = VP_COL_NAMES + DERIVED_FEATURE_COLS + VP_STRUCTURE_COLS
 
 # =================================================================
 # Train / Validation / Test split dates
@@ -87,7 +100,15 @@ VAL_END = "2024-01-01T00:00:00+00:00"
 # =================================================================
 # Label configuration
 # =================================================================
-LABEL_HORIZON_BARS = BARS_PER_DAY           # 6 bars = 24h lookahead for label
+LABEL_HORIZON_BARS = BARS_PER_DAY           # 6 bars = 24h lookahead (legacy, used as fallback)
+LABEL_MODE = "first_hit"                    # "fixed_horizon" or "first_hit"
+LABEL_TP_PCT = 0.025                        # Take-profit base (bull): 2.5%
+LABEL_SL_PCT = 0.05                         # Stop-loss base (bull): 5%
+LABEL_REGIME_ADAPTIVE = True                # Flip TP/SL ratio in bear markets
+LABEL_REGIME_SMA_BARS = 90 * BARS_PER_DAY  # 90-day SMA for bull/bear detection
+LABEL_NEUTRAL_MODE = "off"                  # "off" = no neutral filter, "symmetric" or "skip"
+LABEL_NEUTRAL_PEAKS_THRESHOLD = 0           # num_peaks <= this = neutral (no VP structure)
+LABEL_MAX_BARS = BARS_PER_DAY * 14          # Max lookahead: 14 days (84 bars)
 
 # =================================================================
 # RNN model configuration
@@ -97,10 +118,24 @@ RNN_DROPOUT = 0.2                           # Dropout between RNN layers
 RNN_ACTIVATION = "tanh"                     # Activation function: "tanh" or "relu"
 
 # =================================================================
+# LSTM model configuration
+# =================================================================
+LSTM_HIDDEN_SIZES = [8]                     # Single layer, small param count
+LSTM_DROPOUT = 0.0                          # No dropout — model is underfitting
+
+# =================================================================
+# CNN model configuration
+# =================================================================
+CNN_CHANNELS = [8, 8]                       # Conv layer output channels
+CNN_KERNEL_SIZE = 7                         # Conv kernel width (spans 7 VP bins)
+CNN_FC_SIZE = 32                            # FC layer after conv + derived features
+CNN_DROPOUT = 0.2                           # Moderate regularization
+
+# =================================================================
 # Training configuration
 # =================================================================
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 5e-4
 EPOCHS = 50
 BATCH_SIZE = 64
-EARLY_STOP_PATIENCE = 10                    # Stop if val loss doesn't improve for N epochs
+EARLY_STOP_PATIENCE = 15                    # Stop if val loss doesn't improve for N epochs
 EXPERIMENTS_DIR = PROJECT_ROOT / "experiments"
