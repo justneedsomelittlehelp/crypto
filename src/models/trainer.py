@@ -10,7 +10,7 @@ from src.config import (
     LEARNING_RATE,
     EPOCHS,
     EARLY_STOP_PATIENCE,
-    EXPERIMENTS_DIR,
+    RUNS_DIR,
 )
 
 
@@ -34,7 +34,7 @@ def train_model(
     if run_id is None:
         run_id = f"run_{int(time.time())}"
 
-    run_dir = EXPERIMENTS_DIR / run_id
+    run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Compute class weight from training data to counter majority-class collapse

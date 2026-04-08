@@ -111,3 +111,12 @@ The VP structure gives the range (ceiling/floor). When price is **between** the 
 
 ### Transformer Eval 3-4: 1h data (6x more samples)
 - **Strategy link: same strategy, higher resolution data.** Switched to 1h timeframe (84k rows, 720-bar lookback = same 30d window). Small Transformer (4k params) couldn't handle the complexity. Larger Transformer (22k params, 2 layers, 4 heads) broke past the 4h ceiling: **63.3% acc, F1=0.702 — new best.** The 2-layer attention learns "which peaks relate to each other" — directly encoding the ceiling/floor pair detection that is central to the user's strategy.
+
+### TP/SL Sweep: Optimal risk/reward ratio
+- **Strategy link: how much room to give trades.** Swept 11 TP/SL configs across both directions. Key findings:
+  - **Wide TP (let winners run) dominates.** 7.5/3 (2.5:1 reward:risk) = +3.16% EV/trade, 0 folds below breakeven.
+  - **Wide SL (more room for drawdowns) destroys EV** — accuracy rises but losses overwhelm the small TP.
+  - **Shorting hurts wide-TP configs.** Short side has unfavorable ratio (win 3%, risk 7.5%). Long-only + cash is better.
+  - **Exception: 3/9 config is a short-side monster** (+4.47%/trade short EV). Could be a separate short-biased strategy.
+- **Implication for user's approach:** User's intuition to hold through drawdowns (wide SL) is only profitable if the TP is also wide. The original 2.5/5 (1:2) config had thin EV. Switching to 7.5/3 makes the same model significantly more profitable.
+- See `experiments/EVAL_TPSL_SWEEP.md` for full results.

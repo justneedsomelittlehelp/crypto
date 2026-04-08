@@ -21,7 +21,7 @@ venv/
 data/
 
 # Experiment run folders (model weights, metrics)
-experiments/run_*/
+experiments/runs/
 
 # OS
 .DS_Store

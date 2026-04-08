@@ -8,7 +8,7 @@ Usage:
 
 import sys
 
-from src.config import BATCH_SIZE, LOOKBACK_BARS_MODEL, EXPERIMENTS_DIR
+from src.config import BATCH_SIZE, LOOKBACK_BARS_MODEL, RUNS_DIR
 from src.features.pipeline import build_feature_matrix
 from src.features.dataset import create_splits, get_dataloaders
 from src.models.architecture import RNNClassifier, LSTMClassifier, CNNClassifier, TransformerClassifier
@@ -60,7 +60,7 @@ def cmd_train(model_name: str = "rnn"):
 
 
 def cmd_evaluate(run_id: str):
-    run_dir = EXPERIMENTS_DIR / run_id
+    run_dir = RUNS_DIR / run_id
     model_path = run_dir / "model.pt"
     if not model_path.exists():
         print(f"No checkpoint found at {model_path}")

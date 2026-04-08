@@ -105,7 +105,10 @@ LABEL_MODE = "first_hit"                    # "fixed_horizon" or "first_hit"
 LABEL_TP_PCT = 0.025                        # Take-profit base (bull): 2.5%
 LABEL_SL_PCT = 0.05                         # Stop-loss base (bull): 5%
 LABEL_REGIME_ADAPTIVE = True                # Flip TP/SL ratio in bear markets
+LABEL_REGIME_MODE = "sma"                   # "sma" = SMA-based, "fgi" = Fear & Greed Index
 LABEL_REGIME_SMA_BARS = 90 * BARS_PER_DAY  # 90-day SMA for bull/bear detection
+LABEL_FGI_THRESHOLD = 50                    # FGI >= threshold = bull, < threshold = bear
+LABEL_FGI_PATH = DATA_DIR / "fear_greed_index.csv"
 LABEL_NEUTRAL_MODE = "off"                  # "off" = no neutral filter, "symmetric" or "skip"
 LABEL_NEUTRAL_PEAKS_THRESHOLD = 0           # num_peaks <= this = neutral (no VP structure)
 LABEL_MAX_BARS = BARS_PER_DAY * 14          # Max lookahead: 14 days (84 bars)
@@ -139,3 +142,4 @@ EPOCHS = 50
 BATCH_SIZE = 64
 EARLY_STOP_PATIENCE = 15                    # Stop if val loss doesn't improve for N epochs
 EXPERIMENTS_DIR = PROJECT_ROOT / "experiments"
+RUNS_DIR = EXPERIMENTS_DIR / "runs"

@@ -12,7 +12,10 @@ from src.config import (
     LABEL_SL_PCT,
     LABEL_MAX_BARS,
     LABEL_REGIME_ADAPTIVE,
+    LABEL_REGIME_MODE,
     LABEL_REGIME_SMA_BARS,
+    LABEL_FGI_THRESHOLD,
+    LABEL_FGI_PATH,
     LABEL_NEUTRAL_MODE,
     LABEL_NEUTRAL_PEAKS_THRESHOLD,
     TRAIN_END,
@@ -48,8 +51,10 @@ class TimeSeriesDataset(Dataset):
         if labeled:
             close = df["close"].values
             num_peaks = df["vp_num_peaks"].values if "vp_num_peaks" in df.columns else None
+            dates = df["date"].values if "date" in df.columns else None
+            is_bull = self._build_regime_signal(close, dates)
             if LABEL_MODE == "first_hit":
-                self.labels = self._first_hit_labels(close, num_peaks)
+                self.labels = self._first_hit_labels(close, num_peaks, is_bull)
             else:
                 # Fixed horizon: 1 if close[t+horizon] > close[t]
                 self.labels = np.zeros(len(close), dtype=np.float32)
@@ -65,11 +70,43 @@ class TimeSeriesDataset(Dataset):
                     self.valid_indices.append(idx)
 
     @staticmethod
-    def _first_hit_labels(close: np.ndarray, num_peaks: np.ndarray = None) -> np.ndarray:
+    def _build_regime_signal(close: np.ndarray, dates: np.ndarray = None) -> np.ndarray | None:
+        """Build a boolean is_bull array based on configured regime detection mode.
+
+        Returns None if regime adaptation is disabled.
+        """
+        if not LABEL_REGIME_ADAPTIVE:
+            return None
+
+        n = len(close)
+
+        if LABEL_REGIME_MODE == "fgi" and dates is not None:
+            # Load FGI data and map to bars by date
+            fgi_df = pd.read_csv(LABEL_FGI_PATH, parse_dates=["date"])
+            fgi_lookup = dict(zip(fgi_df["date"].dt.date, fgi_df["fgi_value"].astype(float)))
+
+            is_bull = np.full(n, np.nan)
+            for i in range(n):
+                dt = pd.Timestamp(dates[i]).date()
+                fgi = fgi_lookup.get(dt, np.nan)
+                if not np.isnan(fgi):
+                    is_bull[i] = float(fgi >= LABEL_FGI_THRESHOLD)
+            return is_bull
+
+        # Default: SMA-based regime detection
+        is_bull = np.full(n, np.nan)
+        for i in range(LABEL_REGIME_SMA_BARS, n):
+            sma = np.mean(close[i - LABEL_REGIME_SMA_BARS : i])
+            is_bull[i] = float(close[i] >= sma)
+        return is_bull
+
+    @staticmethod
+    def _first_hit_labels(close: np.ndarray, num_peaks: np.ndarray = None,
+                          is_bull: np.ndarray = None) -> np.ndarray:
         """Label each bar: 1 if price hits +TP before -SL, 0 if SL hit first, NaN if neither.
 
         TP/SL are scaled by recent volatility (std of log-returns over past 30 bars).
-        If LABEL_REGIME_ADAPTIVE is True, TP/SL ratios flip in bear markets.
+        If is_bull is provided, TP/SL ratios flip in bear markets.
         If num_peaks is provided, bars with no VP structure use symmetric TP/SL or are skipped.
         """
         n = len(close)
@@ -90,13 +127,7 @@ class TimeSeriesDataset(Dataset):
         if median_vol < 1e-10:
             median_vol = 1e-10
 
-        # Compute SMA for regime detection
-        sma = np.full(n, np.nan)
-        if LABEL_REGIME_ADAPTIVE:
-            for i in range(LABEL_REGIME_SMA_BARS, n):
-                sma[i] = np.mean(close[i - LABEL_REGIME_SMA_BARS : i])
-
-        warmup = max(vol_window + 1, LABEL_REGIME_SMA_BARS if LABEL_REGIME_ADAPTIVE else 0)
+        warmup = vol_window + 1
 
         for i in range(warmup, n - 1):
             if np.isnan(rolling_vol[i]):
@@ -119,13 +150,13 @@ class TimeSeriesDataset(Dataset):
                     sym_pct = (LABEL_TP_PCT + LABEL_SL_PCT) / 2
                     tp_pct = sym_pct * vol_scale
                     sl_pct = sym_pct * vol_scale
-            elif LABEL_REGIME_ADAPTIVE and not np.isnan(sma[i]):
-                if close[i] >= sma[i]:
-                    # Bull: tight TP, wide SL (1:2)
+            elif is_bull is not None and not np.isnan(is_bull[i]):
+                if is_bull[i]:
+                    # Bull: normal TP/SL
                     tp_pct = LABEL_TP_PCT * vol_scale
                     sl_pct = LABEL_SL_PCT * vol_scale
                 else:
-                    # Bear: flip — wide TP, tight SL (2:1)
+                    # Bear: flip TP/SL
                     tp_pct = LABEL_SL_PCT * vol_scale
                     sl_pct = LABEL_TP_PCT * vol_scale
             else:
