@@ -105,10 +105,11 @@ class TransformerClassifier(nn.Module):
 
     def __init__(
         self,
-        embed_dim: int = 16,
-        n_heads: int = 2,
-        fc_size: int = 32,
-        dropout: float = 0.1,
+        embed_dim: int = 32,
+        n_heads: int = 4,
+        n_layers: int = 2,
+        fc_size: int = 64,
+        dropout: float = 0.15,
     ):
         super().__init__()
 
@@ -118,7 +119,7 @@ class TransformerClassifier(nn.Module):
         # Learnable positional encoding for 50 bins
         self.pos_embed = nn.Parameter(torch.randn(1, N_VP_BINS, embed_dim) * 0.02)
 
-        # Single transformer encoder layer
+        # Stacked transformer encoder layers
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=embed_dim,
             nhead=n_heads,
@@ -126,7 +127,7 @@ class TransformerClassifier(nn.Module):
             dropout=dropout,
             batch_first=True,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=1)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
         # Pool attention output + combine with non-VP features
         self.fc1 = nn.Linear(embed_dim + N_OTHER_FEATURES, fc_size)

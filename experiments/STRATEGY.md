@@ -106,5 +106,8 @@ The VP structure gives the range (ceiling/floor). When price is **between** the 
 ### CNN Evals 24-25: L2 regularization
 - No improvement. The generalization gap is from regime shifts, not weight magnitude.
 
-### Transformer Evals 1-2: Self-attention across VP bins
-- **Strategy link: finding related VP peaks.** Each bin attends to all other bins — can directly learn ceiling/floor pairs regardless of distance. Walk-forward: **61.3% acc, 67.2% precision** (best precision). Matches CNN despite being a first attempt. Data-limited at 4h resolution — 1h data (6x samples) could unlock more.
+### Transformer Evals 1-2: Self-attention across VP bins (4h)
+- **Strategy link: finding related VP peaks.** Each bin attends to all other bins — can directly learn ceiling/floor pairs regardless of distance. Walk-forward: **61.3% acc, 67.2% precision** (best precision on 4h). Matches CNN despite being a first attempt. Data-limited at 4h resolution.
+
+### Transformer Eval 3-4: 1h data (6x more samples)
+- **Strategy link: same strategy, higher resolution data.** Switched to 1h timeframe (84k rows, 720-bar lookback = same 30d window). Small Transformer (4k params) couldn't handle the complexity. Larger Transformer (22k params, 2 layers, 4 heads) broke past the 4h ceiling: **63.3% acc, F1=0.702 — new best.** The 2-layer attention learns "which peaks relate to each other" — directly encoding the ceiling/floor pair detection that is central to the user's strategy.

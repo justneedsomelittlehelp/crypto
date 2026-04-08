@@ -40,7 +40,7 @@
 | `experiments/EVAL_VANILLA_RNN.md` | Vanilla RNN eval log (4 evals, exhausted) |
 | `experiments/EVAL_LSTM.md` | LSTM eval log (7 evals, exhausted) |
 | `experiments/EVAL_CNN.md` | **1D CNN eval log (26 evals, best: Eval 23 at 61.5%)** |
-| `experiments/EVAL_TRANSFORMER.md` | Transformer eval log (2 evals, 61.3% / 67.2% precision) |
+| `experiments/EVAL_TRANSFORMER.md` | **Transformer eval log (4 evals, best: 63.3% on 1h data)** |
 | `experiments/RUN_INDEX.md` | Maps every run_* folder to its eval number |
 
 ### Planned files (future phases)
@@ -91,7 +91,7 @@
 ### Feature engineering
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `LOOKBACK_BARS_MODEL` | 180 | Model input window (180 bars = 30 days) |
+| `LOOKBACK_BARS_MODEL` | 720 | Model input window (720 bars = 30 days at 1h) |
 | `VOLUME_ROLL_WINDOW_DAYS` | 30 | Rolling volume normalization window |
 | `TRAIN_END` | `2023-01-01` | Train/val split boundary |
 | `VAL_END` | `2024-01-01` | Val/test split boundary |

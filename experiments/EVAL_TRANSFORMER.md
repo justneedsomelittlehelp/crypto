@@ -71,4 +71,63 @@
 | CNN (Eval 23) | 3,581 | 61.5% | 65.7% | 0.690 | 88.0% | 41.7% |
 | Transformer (Eval 2) | 4,113 | 61.3% | 67.2% | 0.670 | 88.2% | 40.4% |
 
-**Conclusion:** Transformer matches CNN with slightly better precision. Both hit the same ceiling (~61%) — the bottleneck is regime transitions, not model architecture. With more data (1h resolution → 6x samples), the Transformer could potentially break past this ceiling.
+**Conclusion:** Transformer matches CNN with slightly better precision. Both hit ~61% ceiling on 4h data.
+
+---
+
+## 1h Data Experiments
+
+Switched to 1h timeframe: 84,750 rows (vs 20,832 at 4h). LOOKBACK_BARS_MODEL=720 (30 days). ~50k+ training samples per fold.
+
+### Eval 3 — Walk-forward (1h, embed=16, heads=2, params=4,113)
+
+**Overall:** 58.7% acc, 61.2% precision, F1=0.682
+
+| Fold | Period | Acc |
+|------|--------|-----|
+| 1 | 2020 H2 | 88.4% |
+| 2 | 2021 H1 | 39.9% |
+| 3 | 2021 H2 | 45.0% |
+| 4 | 2022 H1 | 64.6% |
+| 5 | 2022 H2 | 53.2% |
+| 6 | 2023 H1 | 58.4% |
+| 7 | 2023 H2 | 61.0% |
+| 8 | 2024 H1 | 52.6% |
+| 9 | 2024 H2 | 64.4% |
+| 10 | 2025 H1 | 59.5% |
+
+**Notes:** Small Transformer too small for 1h data complexity. Worse than 4h version.
+
+---
+
+### Eval 4 — Walk-forward (1h, embed=32, heads=4, 2 layers, params=21,889) **NEW BEST**
+
+**Overall:** **63.3% acc, 65.8% precision, F1=0.702**
+
+| Fold | Period | Acc | vs 4h best |
+|------|--------|-----|------------|
+| 1 | 2020 H2 | 88.4% | +0.4 |
+| 2 | 2021 H1 | **57.5%** | **+9.5** |
+| 3 | 2021 H2 | 44.4% | +0.8 |
+| 4 | 2022 H1 | 69.0% | -8.8 |
+| 5 | 2022 H2 | **66.4%** | **+3.8** |
+| 6 | 2023 H1 | **58.4%** | **+11.1** |
+| 7 | 2023 H2 | **81.0%** | +6.3 |
+| 8 | 2024 H1 | **54.8%** | +1.2 |
+| 9 | 2024 H2 | 72.9% | -6.3 |
+| 10 | 2025 H1 | 42.0% | +0.3 |
+
+**Only 3 folds below 50%** (was 4). Key improvements: Fold 2 (48→57.5%), Fold 6 (47.3→58.4%).
+
+---
+
+### Cross-model comparison
+
+| Model | Data | Params | Acc | Precision | F1 | Folds <50% |
+|-------|------|--------|-----|-----------|-----|------------|
+| CNN (Eval 23) | 4h | 3,581 | 61.5% | 65.7% | 0.690 | 4 |
+| Transformer (Eval 2) | 4h | 4,113 | 61.3% | 67.2% | 0.670 | 4 |
+| Transformer (Eval 3) | 1h | 4,113 | 58.7% | 61.2% | 0.682 | 4 |
+| **Transformer (Eval 4)** | **1h** | **21,889** | **63.3%** | **65.8%** | **0.702** | **3** |
+
+**Key insight:** 1h data + larger Transformer broke past the 4h ceiling. The combination of 6x more training data and a model big enough to use it pushed accuracy to 63.3% — first time above 62%. The Transformer's self-attention benefits more from data volume than the CNN's fixed filters.

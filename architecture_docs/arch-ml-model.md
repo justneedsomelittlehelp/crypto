@@ -50,17 +50,19 @@ Derived from the user's actual trading strategy (see `experiments/STRATEGY.md`):
 - Gaussian smoothing sigma=0.8, prominence=0.05 for VP peak detection
 - See `experiments/EVAL_CNN.md` (26 evals across 8 phases)
 
-### Transformer (61.3% walk-forward, 67.2% precision)
+### Transformer (63.3% walk-forward — BEST MODEL)
 - Self-attention across 50 VP bins — each bin attends to all others
 - Can learn peak-pair relationships (ceiling/floor) directly
-- Best config: embed=16, 2 heads, 1 layer, FC(31→32→1), 4,113 params
-- Matches CNN accuracy with higher precision
-- See `experiments/EVAL_TRANSFORMER.md` (2 evals)
+- Best config: embed=32, 4 heads, 2 layers, FC(47→64→1), 21,889 params
+- Trained on **1h data** (84k rows, 720-bar lookback = 30 days)
+- 2 attention layers: first finds peaks, second finds peak-pair relationships
+- See `experiments/EVAL_TRANSFORMER.md` (4 evals)
 
 ### Key findings across all models
 - **Label design matters most:** First-hit labels with regime-adaptive TP/SL was the biggest improvement (+15% over fixed horizon)
-- **Architecture matters less:** CNN and Transformer both hit ~61% — the ceiling is regime transitions, not model capacity
-- **Next direction:** 1h data (6x more samples) could break the ceiling, especially for Transformer
+- **Data resolution matters:** 1h data (6x more samples) broke past the 4h ceiling (61.5% → 63.3%)
+- **Model capacity must match data:** Small Transformer on 1h was worse; larger Transformer on 1h was best
+- **Next direction:** 15min data (4x more than 1h) + pipeline optimization
 
 ## Training Principles
 

@@ -13,7 +13,7 @@ RAW_DATA_DIR = DATA_DIR / "raw"
 # Data pipeline configuration
 # =================================================================
 SYMBOL = "BTC/USD"
-TIMEFRAME = "4h"
+TIMEFRAME = "1h"
 START_DATE = "2016-01-01T00:00:00Z"
 
 # Exchanges to merge
@@ -70,7 +70,7 @@ def output_meta_name() -> str:
 # =================================================================
 # Feature engineering configuration
 # =================================================================
-LOOKBACK_BARS_MODEL = 180                   # Model input window (180 bars = 30 days at 4h timeframe)
+LOOKBACK_BARS_MODEL = 720                   # Model input window (720 bars = 30 days at 1h timeframe)
 VOLUME_ROLL_WINDOW_DAYS = 30                # Rolling window for volume normalization
 VOLUME_ROLL_WINDOW_BARS = VOLUME_ROLL_WINDOW_DAYS * BARS_PER_DAY
 
