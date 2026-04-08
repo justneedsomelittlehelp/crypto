@@ -53,156 +53,143 @@ def compute_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _smooth_and_find_peaks(agg_vp: np.ndarray, sigma: float = 0.8, prominence: float = 0.05) -> tuple[np.ndarray, np.ndarray]:
+    """Smooth a VP profile and find peaks. Returns (peaks_array, normalized_profile)."""
+    smooth = gaussian_filter1d(agg_vp.astype(np.float64), sigma=sigma)
+    vp_max = smooth.max()
+    if vp_max > 0:
+        smooth /= vp_max
+    peaks, _ = find_peaks(smooth, prominence=prominence, distance=3)
+    return peaks, smooth
+
+
 def compute_vp_structure_features(
     df: pd.DataFrame,
     window: int = LOOKBACK_BARS_MODEL,
 ) -> pd.DataFrame:
     """Aggregate VP bins over a rolling window and extract structural features.
 
-    For each bar, sums the 50 VP bins over the preceding `window` bars to create
-    one aggregated volume profile, then finds local maxima (support/resistance nodes).
-
-    Features produced:
-    - vp_ceiling_dist: distance (in bins) from current price (bin 25) to nearest peak above
-    - vp_floor_dist: distance (in bins) from current price (bin 25) to nearest peak below
-    - vp_num_peaks: number of prominent peaks in the aggregated VP
-    - vp_ceiling_strength: volume at the ceiling peak (normalized)
-    - vp_floor_strength: volume at the floor peak (normalized)
+    Optimized: uses rolling sum (add new row, subtract old) instead of
+    recomputing the full sum each step. Pre-computes all rolling sums for
+    shifted windows in one pass.
     """
     df = df.copy()
     vp_matrix = df[VP_COL_NAMES].values  # (n_rows, 50)
     mid_bin = REL_BIN_COUNT // 2  # bin 25 = current price
-
     n = len(df)
+
+    # --- Pre-compute rolling VP sums using cumulative sum ---
+    # cumsum[i] = sum of vp_matrix[0:i], so window sum = cumsum[i] - cumsum[i-window]
+    cumsum = np.zeros((n + 1, REL_BIN_COUNT), dtype=np.float64)
+    np.cumsum(vp_matrix, axis=0, out=cumsum[1:])
+
+    def get_rolling_vp(idx, win):
+        """Get aggregated VP for window ending at idx (exclusive) with length win."""
+        start = idx - win
+        if start < 0:
+            return None
+        return cumsum[idx] - cumsum[start]
+
+    # --- Pass 1: compute peaks for all needed positions ---
+    # We need peaks at: current window (i-window:i) and shifted windows
+    shift_days = [3, 6, 9]
+    shift_bars = [BARS_PER_DAY * d for d in shift_days]
+    max_shift = max(shift_bars)
+
+    # Cache: store (peaks, norm_profile, ceiling_bin, floor_bin) per position
+    # Key = end index of the window
+    peak_cache = {}
+
+    def get_peaks_for_window_end(end_idx):
+        """Get peak info for window ending at end_idx."""
+        if end_idx in peak_cache:
+            return peak_cache[end_idx]
+
+        agg_vp = get_rolling_vp(end_idx, window)
+        if agg_vp is None:
+            peak_cache[end_idx] = (np.array([]), None, None, None)
+            return peak_cache[end_idx]
+
+        peaks, norm = _smooth_and_find_peaks(agg_vp)
+
+        above = peaks[peaks > mid_bin]
+        below = peaks[peaks < mid_bin]
+        ceil_bin = above[0] if len(above) > 0 else None
+        floor_bin = below[-1] if len(below) > 0 else None
+
+        peak_cache[end_idx] = (peaks, norm, ceil_bin, floor_bin)
+        return peak_cache[end_idx]
+
+    # --- Output arrays ---
     ceiling_dist = np.full(n, np.nan, dtype=np.float32)
     floor_dist = np.full(n, np.nan, dtype=np.float32)
-    num_peaks = np.full(n, np.nan, dtype=np.float32)
+    num_peaks_arr = np.full(n, np.nan, dtype=np.float32)
     ceiling_strength = np.full(n, np.nan, dtype=np.float32)
     floor_strength = np.full(n, np.nan, dtype=np.float32)
+    ceiling_consistency = np.full(n, np.nan, dtype=np.float32)
+    floor_consistency = np.full(n, np.nan, dtype=np.float32)
 
+    # --- Main loop ---
+    start_idx = window + max_shift
     for i in range(window, n):
-        # Sum VP bins across the lookback window
-        agg_vp = vp_matrix[i - window : i].sum(axis=0)
+        peaks, norm, ceil_bin, floor_bin = get_peaks_for_window_end(i)
 
-        # Smooth with Gaussian filter to remove bin-level noise
-        agg_vp_smooth = gaussian_filter1d(agg_vp.astype(np.float64), sigma=0.8)
-
-        # Normalize to [0, 1]
-        vp_max = agg_vp_smooth.max()
-        if vp_max > 0:
-            agg_vp_norm = agg_vp_smooth / vp_max
-        else:
-            agg_vp_norm = agg_vp_smooth
-
-        # Find prominent peaks (local maxima)
-        peaks, properties = find_peaks(agg_vp_norm, prominence=0.05, distance=3)
-
-        num_peaks[i] = len(peaks)
+        num_peaks_arr[i] = len(peaks)
 
         if len(peaks) == 0:
-            # No clear structure — set distances to max (normalized)
             ceiling_dist[i] = 1.0
             floor_dist[i] = 1.0
             ceiling_strength[i] = 0.0
             floor_strength[i] = 0.0
-            continue
-
-        # Peaks above current price (ceiling candidates)
-        above = peaks[peaks > mid_bin]
-        # Peaks below current price (floor candidates)
-        below = peaks[peaks < mid_bin]
-
-        if len(above) > 0:
-            nearest_above = above[0]  # closest peak above
-            ceiling_dist[i] = (nearest_above - mid_bin) / mid_bin  # normalized 0-1
-            ceiling_strength[i] = agg_vp_norm[nearest_above]
         else:
-            ceiling_dist[i] = 1.0  # no ceiling found, max distance
-            ceiling_strength[i] = 0.0
-
-        if len(below) > 0:
-            nearest_below = below[-1]  # closest peak below
-            floor_dist[i] = (mid_bin - nearest_below) / mid_bin  # normalized 0-1
-            floor_strength[i] = agg_vp_norm[nearest_below]
-        else:
-            floor_dist[i] = 1.0  # no floor found, max distance
-            floor_strength[i] = 0.0
-
-    # --- Peak consistency: check if ceiling/floor persist across shifted windows ---
-    # Shift offsets in bars (3d, 6d, 9d back)
-    shift_bars = [BARS_PER_DAY * d for d in [3, 6, 9]]
-    ceiling_consistency = np.full(n, np.nan, dtype=np.float32)
-    floor_consistency = np.full(n, np.nan, dtype=np.float32)
-
-    max_shift = max(shift_bars)
-    for i in range(window + max_shift, n):
-        # Current window's ceiling/floor bins
-        curr_ceiling_bin = None
-        curr_floor_bin = None
-
-        agg_curr = vp_matrix[i - window : i].sum(axis=0)
-        agg_curr_smooth = gaussian_filter1d(agg_curr.astype(np.float64), sigma=0.8)
-        vp_max_curr = agg_curr_smooth.max()
-        if vp_max_curr > 0:
-            agg_curr_norm = agg_curr_smooth / vp_max_curr
-        else:
-            agg_curr_norm = agg_curr_smooth
-        curr_peaks, _ = find_peaks(agg_curr_norm, prominence=0.05, distance=3)
-
-        above_curr = curr_peaks[curr_peaks > mid_bin]
-        below_curr = curr_peaks[curr_peaks < mid_bin]
-        if len(above_curr) > 0:
-            curr_ceiling_bin = above_curr[0]
-        if len(below_curr) > 0:
-            curr_floor_bin = below_curr[-1]
-
-        ceiling_matches = 0
-        floor_matches = 0
-        tolerance = 2  # bins
-
-        for shift in shift_bars:
-            start = i - window - shift
-            end = i - shift
-            if start < 0:
-                continue
-            agg_shifted = vp_matrix[start:end].sum(axis=0)
-            agg_shifted_smooth = gaussian_filter1d(agg_shifted.astype(np.float64), sigma=0.8)
-            vp_max_s = agg_shifted_smooth.max()
-            if vp_max_s > 0:
-                agg_shifted_norm = agg_shifted_smooth / vp_max_s
+            if ceil_bin is not None:
+                ceiling_dist[i] = (ceil_bin - mid_bin) / mid_bin
+                ceiling_strength[i] = norm[ceil_bin]
             else:
-                agg_shifted_norm = agg_shifted_smooth
-            shifted_peaks, _ = find_peaks(agg_shifted_norm, prominence=0.05, distance=3)
+                ceiling_dist[i] = 1.0
+                ceiling_strength[i] = 0.0
 
-            if curr_ceiling_bin is not None and len(shifted_peaks) > 0:
-                if any(abs(p - curr_ceiling_bin) <= tolerance for p in shifted_peaks):
-                    ceiling_matches += 1
+            if floor_bin is not None:
+                floor_dist[i] = (mid_bin - floor_bin) / mid_bin
+                floor_strength[i] = norm[floor_bin]
+            else:
+                floor_dist[i] = 1.0
+                floor_strength[i] = 0.0
 
-            if curr_floor_bin is not None and len(shifted_peaks) > 0:
-                if any(abs(p - curr_floor_bin) <= tolerance for p in shifted_peaks):
-                    floor_matches += 1
+        # --- Consistency check (only if enough history for shifts) ---
+        if i >= start_idx:
+            tolerance = 2
+            ceil_matches = 0
+            floor_matches = 0
 
-        ceiling_consistency[i] = ceiling_matches / len(shift_bars)
-        floor_consistency[i] = floor_matches / len(shift_bars)
+            for shift in shift_bars:
+                shifted_end = i - shift
+                s_peaks, _, _, _ = get_peaks_for_window_end(shifted_end)
 
-    # Mid-range score: 1 when price is midway between ceiling and floor, 0 at extremes
-    # Uses ceiling_dist and floor_dist: if both are similar, price is mid-range
+                if ceil_bin is not None and len(s_peaks) > 0:
+                    if np.any(np.abs(s_peaks - ceil_bin) <= tolerance):
+                        ceil_matches += 1
+
+                if floor_bin is not None and len(s_peaks) > 0:
+                    if np.any(np.abs(s_peaks - floor_bin) <= tolerance):
+                        floor_matches += 1
+
+            ceiling_consistency[i] = ceil_matches / len(shift_bars)
+            floor_consistency[i] = floor_matches / len(shift_bars)
+
+    # --- Mid-range score (vectorized) ---
+    c = ceiling_dist
+    f = floor_dist
+    valid = ~(np.isnan(c) | np.isnan(f))
     mid_range = np.full(n, np.nan, dtype=np.float32)
-    for i in range(n):
-        c = ceiling_dist[i]
-        f = floor_dist[i]
-        if np.isnan(c) or np.isnan(f):
-            continue
-        total = c + f
-        if total < 1e-8:
-            mid_range[i] = 1.0
-        else:
-            # min/max ratio: 1 when equal (mid-range), 0 when one is much larger
-            mid_range[i] = min(c, f) / max(c, f)
+    mx = np.maximum(c[valid], f[valid])
+    mn = np.minimum(c[valid], f[valid])
+    mx = np.where(mx < 1e-8, 1.0, mx)
+    mid_range[valid] = mn / mx
 
     df["vp_ceiling_dist"] = ceiling_dist
     df["vp_floor_dist"] = floor_dist
-    df["vp_num_peaks"] = num_peaks
+    df["vp_num_peaks"] = num_peaks_arr
     df["vp_ceiling_strength"] = ceiling_strength
     df["vp_floor_strength"] = floor_strength
     df["vp_ceiling_consistency"] = ceiling_consistency

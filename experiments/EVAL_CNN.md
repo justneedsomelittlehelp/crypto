@@ -153,4 +153,4 @@ Changed VP smoothing from sigma=2.0/prominence=0.15 (aggressive) to sigma=1.0/pr
 ### Eval 25 — Walk-forward (+ L2 weight_decay=1e-4)
 **Overall:** 60.3% acc — lighter L2 also didn't help
 
-**Conclusion:** Sigma=0.8/prom=0.05 is marginally best (61.5%). L2 regularization doesn't help — the generalization gap is from regime shifts, not weight magnitude. **Eval 23 is current best. Moving to different model architectures next.**
+**Conclusion:** Sigma=0.8/prom=0.05 is marginally best (61.5%). L2 regularization doesn't help — the generalization gap is from regime shifts, not weight magnitude. **CNN peaked at 61.5%. Transformer on 1h data surpassed it at 63.3% (see EVAL_TRANSFORMER.md).**

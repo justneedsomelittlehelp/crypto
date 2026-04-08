@@ -14,6 +14,12 @@ from src.config import (
 )
 
 
+def get_device() -> torch.device:
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def train_model(
     model: nn.Module,
     train_loader: DataLoader,
@@ -23,6 +29,8 @@ def train_model(
     patience: int = EARLY_STOP_PATIENCE,
     run_id: str | None = None,
 ) -> dict:
+    device = get_device()
+
     if run_id is None:
         run_id = f"run_{int(time.time())}"
 
@@ -33,8 +41,9 @@ def train_model(
     all_labels = torch.cat([y for _, y in train_loader])
     n_pos = all_labels.sum().item()
     n_neg = len(all_labels) - n_pos
-    pos_weight = torch.tensor([n_neg / n_pos]) if n_pos > 0 else torch.tensor([1.0])
+    pos_weight = torch.tensor([n_neg / n_pos], device=device) if n_pos > 0 else torch.tensor([1.0], device=device)
 
+    model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
@@ -50,6 +59,7 @@ def train_model(
         train_total = 0
 
         for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
             logits = model(x)
             loss = criterion(logits, y)
@@ -72,6 +82,7 @@ def train_model(
 
         with torch.no_grad():
             for x, y in val_loader:
+                x, y = x.to(device), y.to(device)
                 logits = model(x)
                 loss = criterion(logits, y)
                 val_loss_sum += loss.item() * len(y)
@@ -122,7 +133,8 @@ def train_model(
     print(f"\nBest val loss: {best_val_loss:.4f}")
     print(f"Checkpoint saved to: {run_dir / 'model.pt'}")
 
-    # Load best weights back into model
+    # Load best weights back into model (on CPU for compatibility)
+    model = model.cpu()
     model.load_state_dict(torch.load(run_dir / "model.pt", weights_only=True))
 
     return {"run_id": run_id, "run_dir": run_dir, "history": history, "best_val_loss": best_val_loss}

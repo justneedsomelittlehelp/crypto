@@ -114,10 +114,11 @@
 ### Training
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `LEARNING_RATE` | 1e-4 | Adam learning rate |
+| `LEARNING_RATE` | 5e-4 | Adam learning rate |
 | `EPOCHS` | 50 | Max training epochs |
 | `BATCH_SIZE` | 64 | Training batch size |
-| `EARLY_STOP_PATIENCE` | 10 | Epochs without val improvement before stopping |
+| `EARLY_STOP_PATIENCE` | 15 | Epochs without val improvement before stopping |
+| Device | MPS (auto) | Apple Metal GPU acceleration (~2x vs CPU) |
 
 ### Kraken trading
 | Parameter | Value | Notes |

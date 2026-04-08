@@ -131,3 +131,32 @@ Switched to 1h timeframe: 84,750 rows (vs 20,832 at 4h). LOOKBACK_BARS_MODEL=720
 | **Transformer (Eval 4)** | **1h** | **21,889** | **63.3%** | **65.8%** | **0.702** | **3** |
 
 **Key insight:** 1h data + larger Transformer broke past the 4h ceiling. The combination of 6x more training data and a model big enough to use it pushed accuracy to 63.3% — first time above 62%. The Transformer's self-attention benefits more from data volume than the CNN's fixed filters.
+
+---
+
+## Confidence Threshold Analysis
+
+Collected raw logits from walk-forward (10 folds, 20,435 test samples) and analyzed precision/accuracy at different confidence thresholds.
+
+| Threshold | Trades | Per day | Precision | Accuracy |
+|-----------|--------|---------|-----------|----------|
+| 0.50 | 20,435 | 24.0 | 61.6% | 59.8% |
+| 0.55 | 19,890 | 23.4 | 62.1% | 59.8% |
+| 0.60 | 19,372 | 22.8 | 62.8% | 60.1% |
+| 0.63 | 18,907 | 22.2 | 63.2% | 60.4% |
+| 0.65 | 17,902 | 21.0 | 63.1% | 60.2% |
+| 0.70 | 13,306 | 15.6 | 62.1% | 59.1% |
+| 0.75 | 7,787 | 9.1 | 59.1% | 60.4% |
+| 0.80 | 3,382 | 4.0 | 29.4% | 42.9% |
+
+**Conclusion:** Confidence filtering gives minimal improvement (~1.5% precision gain at 0.63 threshold). The model's logits are too concentrated — it doesn't differentiate between "very sure" and "guessing." An ensemble or calibration approach would be needed for meaningful confidence-based filtering.
+
+---
+
+## Infrastructure
+
+### MPS (Metal) GPU acceleration
+Enabled Apple MPS backend for training. ~2x speedup over CPU. Full walk-forward: ~25-30 min (was ~50-60 min).
+
+### Pipeline optimization
+VP structure feature computation optimized with cumulative sum + peak cache: **2.8 seconds** for 84k rows (was ~30 minutes). 640x speedup. Enables 15min data scaling.
