@@ -50,11 +50,30 @@ def compute_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     df["lower_wick"] = (df[["open", "close"]].min(axis=1) - df["low"]) / bar_height
     df["body_dir"] = np.sign(df["close"] - df["open"])
 
-    # Normalized OHLC for in-model daily candle aggregation
-    # Stored as ratios to current close so they're scale-invariant
-    df["ohlc_open_ratio"] = df["open"] / df["close"]
-    df["ohlc_high_ratio"] = df["high"] / df["close"]
-    df["ohlc_low_ratio"] = df["low"] / df["close"]
+    # Normalized OHLC for in-model daily candle aggregation.
+    # Centered at 0 (subtract 1) so they're symmetric around the close price.
+    df["ohlc_open_ratio"] = df["open"] / df["close"] - 1.0
+    df["ohlc_high_ratio"] = df["high"] / df["close"] - 1.0
+    df["ohlc_low_ratio"] = df["low"] / df["close"] - 1.0
+
+    # ── Walk-forward-safe z-score normalization ──
+    # Use expanding window stats so each row only sees its own past data.
+    # Prevents data leakage in walk-forward training.
+    min_periods = VOLUME_ROLL_WINDOW_BARS  # 30 days warmup before any z-scoring
+
+    for col in ["volume_ratio", "log_return", "bar_range", "bar_body"]:
+        # Log-transform volume_ratio first (long-tail compression)
+        if col == "volume_ratio":
+            base = np.log(df[col] + 1.0)
+        else:
+            base = df[col]
+        exp_mean = base.expanding(min_periods=min_periods).mean()
+        exp_std = base.expanding(min_periods=min_periods).std()
+        z = (base - exp_mean) / exp_std.clip(lower=1e-8)
+        # Soft squash with tanh: smoothly bounds outliers while preserving
+        # ordering. Black-swan magnitude is compressed but still distinguishable
+        # from normal extreme moves. Killswitch handles real risk in production.
+        df[col] = 5.0 * np.tanh(z / 5.0)
 
     return df
 

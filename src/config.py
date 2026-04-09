@@ -80,16 +80,9 @@ DERIVED_FEATURE_COLS = [
     "upper_wick", "lower_wick", "body_dir",
     "ohlc_open_ratio", "ohlc_high_ratio", "ohlc_low_ratio",
 ]
-VP_STRUCTURE_COLS = [
-    "vp_ceiling_dist",
-    "vp_floor_dist",
-    "vp_num_peaks",
-    "vp_ceiling_strength",
-    "vp_floor_strength",
-    "vp_ceiling_consistency",
-    "vp_floor_consistency",
-    "vp_mid_range",
-]
+# VP structure features removed — spatial Transformer learns shape from raw bins.
+# Pipeline still computes them (for VP smoothing/peak detection) but they're not features.
+VP_STRUCTURE_COLS = []
 FEATURE_COLS = VP_COL_NAMES + DERIVED_FEATURE_COLS + VP_STRUCTURE_COLS
 
 # =================================================================

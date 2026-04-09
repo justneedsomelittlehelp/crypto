@@ -149,11 +149,58 @@ Param cost: +16 (just one more dim in the candle embed projection).
 
 ---
 
-## Eval 2 — DualBranch v2 with volume context (pending)
+## Eval 2 — DualBranch v2 with volume context (2026-04-09)
 
-**Change:** Daily candle now has 8 features instead of 7. Added `day_volume_ratio` = mean of hourly `volume_ratio` across the day's 24 hours. The candle Transformer can now learn to weight candles by volume strength.
+**Change:** Daily candle now has 8 features instead of 7. Added `day_volume_ratio` = mean of hourly `volume_ratio` across the day's 24 hours.
 
-**Hypothesis:** Volume-weighted candle attention should reduce noise from neutral low-volume candles, letting the model focus on the few high-confidence hammers/inverted hammers that the user actually trades on.
+### Results
+
+| Metric | v1 | v2 | Diff |
+|--------|----|----|----|
+| Accuracy | 60.5% | 57.8% | -2.7% |
+| Bull precision | 34.5% | 37.5% | +3.0% |
+| Bull long EV | +0.63% | +0.93% | +0.30% |
+| Bear long EV | +1.01% | +0.99% | -0.02% |
+| Bear short EV | +0.76% | +0.65% | -0.11% |
+
+### Fold-by-fold (vs v1)
+
+| Fold | v1 | v2 | Diff |
+|------|----|----|----|
+| 1 | 49.1% | 53.0% | +3.9 |
+| 2 | 56.3% | 52.1% | -4.2 |
+| 3 | 56.6% | 57.9% | +1.3 |
+| 4 | 63.6% | 57.9% | -5.7 |
+| 5 | 68.7% | 64.6% | -4.1 |
+| 6 | 50.6% | **39.7%** | **-10.9** |
+| 7 | 65.4% | 79.0% | +13.6 |
+| 8 | 70.4% | **49.3%** | **-21.1** |
+| 9 | 59.6% | 59.0% | -0.6 |
+| 10 | 66.9% | 75.8% | +8.9 |
+
+### What this tells us
+
+Volume helped bull long EV (+0.30%) and won folds 1, 7, 10. But it **destroyed fold 6 (40%) and fold 8 (49%)** — the historically hardest folds.
+
+**Hypothesis:** In choppy/transition periods, volume spikes happen during fakeouts and indecision, not real moves. The model can't yet learn to weight `(shape × volume)` selectively — it just sees volume as one more input that can mislead it.
+
+The fundamental issue: model treats all 30 days equally. Adding more features doesn't fix it.
+
+Log: `logs/dualbranch_v2_volume.log`
+
+---
+
+## Eval 3 — Pipeline overhaul: scaling + remove VP structure (pending)
+
+**Changes:**
+1. **Removed 8 VP structure features** — let spatial Transformer learn shape from raw bins
+2. **Walk-forward-safe z-score** for `volume_ratio`, `log_return`, `bar_range`, `bar_body` (expanding window, no leakage)
+3. **Soft tanh squashing** to bound outliers without losing magnitude info (black-swan handling)
+4. **OHLC ratios centered at 0** (subtract 1)
+
+Total features dropped from 68 → 60. Model param count slightly smaller from narrower FC concat.
+
+**Hypothesis:** Cleaner feature scales let the model learn from gradients across all features instead of being dominated by `volume_ratio`'s 50x range. Removing handcrafted VP features tests whether spatial attention can learn shape on its own.
 
 Pending Colab run.
 
