@@ -169,6 +169,107 @@ class TransformerClassifier(nn.Module):
         return logit
 
 
+class TemporalTransformerClassifier(nn.Module):
+    """Two-stage Transformer: spatial attention per day + temporal attention across days.
+
+    Stage 1 (spatial): For each of 30 days, sum 24 hourly VP bins into a daily VP,
+        then run self-attention across 50 bins. Produces one embedding per day.
+        Shared weights across all days.
+    Stage 2 (temporal): Self-attention across 30 daily embeddings.
+        Learns VP persistence, breakouts, evolving support/resistance.
+
+    Non-VP features: taken from the last timestep (same as current model).
+    """
+
+    def __init__(
+        self,
+        embed_dim: int = 32,
+        n_heads: int = 4,
+        n_spatial_layers: int = 1,
+        n_temporal_layers: int = 1,
+        fc_size: int = 64,
+        dropout: float = 0.15,
+        n_days: int = 30,
+        bars_per_day: int = 24,
+    ):
+        super().__init__()
+        self.n_days = n_days
+        self.bars_per_day = bars_per_day
+        self.embed_dim = embed_dim
+
+        # Stage 1: Spatial attention across VP bins (shared across all days)
+        self.bin_embed = nn.Linear(1, embed_dim)
+        self.spatial_pos = nn.Parameter(torch.randn(1, N_VP_BINS, embed_dim) * 0.02)
+        spatial_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=n_heads,
+            dim_feedforward=embed_dim * 2,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.spatial_transformer = nn.TransformerEncoder(spatial_layer, num_layers=n_spatial_layers)
+
+        # Stage 2: Temporal attention across days
+        self.temporal_pos = nn.Parameter(torch.randn(1, n_days, embed_dim) * 0.02)
+        temporal_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=n_heads,
+            dim_feedforward=embed_dim * 2,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.temporal_transformer = nn.TransformerEncoder(temporal_layer, num_layers=n_temporal_layers)
+
+        # Final FC: temporal output + non-VP features
+        self.fc1 = nn.Linear(embed_dim + N_OTHER_FEATURES, fc_size)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(fc_size, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (batch, lookback=720, features)
+        batch_size = x.shape[0]
+        vp_bins = x[:, :, :N_VP_BINS]        # (batch, 720, 50)
+        other = x[:, -1, N_VP_BINS:]          # (batch, N_OTHER)
+
+        # Stage 1: spatial attention per day
+        daily_embeds = []
+        for d in range(self.n_days):
+            start = d * self.bars_per_day
+            end = start + self.bars_per_day
+            day_vp = vp_bins[:, start:end, :].sum(dim=1)  # (batch, 50)
+
+            # Normalize per day per sample
+            day_max = day_vp.max(dim=1, keepdim=True).values.clamp(min=1e-8)
+            day_vp = day_vp / day_max
+
+            # Each bin as token → embed → spatial attention
+            tokens = day_vp.unsqueeze(-1)                          # (batch, 50, 1)
+            tokens = self.bin_embed(tokens) + self.spatial_pos     # (batch, 50, embed_dim)
+            attended = self.spatial_transformer(tokens)             # (batch, 50, embed_dim)
+            day_embed = attended.mean(dim=1)                       # (batch, embed_dim)
+            daily_embeds.append(day_embed)
+
+        # Stack daily embeddings: (batch, 30, embed_dim)
+        temporal_input = torch.stack(daily_embeds, dim=1)
+
+        # Stage 2: temporal attention across days
+        temporal_input = temporal_input + self.temporal_pos
+        temporal_out = self.temporal_transformer(temporal_input)    # (batch, 30, embed_dim)
+
+        # Pool across days
+        pooled = temporal_out.mean(dim=1)                          # (batch, embed_dim)
+
+        # Combine with non-VP features
+        combined = torch.cat([pooled, other], dim=1)
+
+        out = self.dropout(combined)
+        out = self.relu(self.fc1(out))
+        out = self.dropout(out)
+        logit = self.fc2(out).squeeze(-1)
+        return logit
+
+
 class CNNClassifier(nn.Module):
     """1D CNN that treats the aggregated VP profile as a spatial signal.
 

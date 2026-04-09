@@ -186,6 +186,44 @@ Scripts: `src/models/eval_regime_fgi.py`, `src/models/eval_regime_compare.py`
 
 ---
 
+## Dual Model: Separate Bull Long + Bear Short (2026-04-08)
+
+**Hypothesis:** Train two separate models — bull model (7.5/3, long on pred=1) and bear model (3/9, short on pred=0). FGI decides which is active.
+
+**Setup:** Both models trained on ALL data with fixed labels (no regime flip). FGI used only at inference to select which model acts.
+
+### Results
+
+| Metric | Dual Model | Single Adaptive |
+|--------|-----------|----------------|
+| Bull precision | 39.3% | 39.4% |
+| Bear NPV | **22.5%** | **77.9%** |
+| EV bull | +1.13% | +1.14% |
+| EV bear | **-0.30%** | **+0.68%** |
+| EV combined | **+0.51%** | **+0.94%** |
+
+### Why it failed
+
+The bear model (3/9 labels) trains on ALL data. In bull markets (~55% of data), label=1 is overwhelmingly common (price easily rises 3% before dropping 9%). The model learns "predict 1 most of the time." When activated in bear markets and asked to predict 0 (short signal), it can't — it never learned bear-specific patterns because bull bars dominated training.
+
+The single adaptive model avoids this by flipping labels in bear markets, so the model directly trains on bear-appropriate targets (3% bounce before 7.5% drop).
+
+### Regime-split training considered
+
+Training bear model only on bear bars would give cleaner labels, but:
+- Only ~40-45% of data is bear → ~34k samples total, ~17k per fold
+- With 22k params, that's 0.8x samples/param — likely underfitting
+- Walk-forward folds would have very uneven bear-bar counts (some periods are mostly bull)
+
+### Conclusion
+
+**Single adaptive FGI model remains best at +0.94% combined EV.** The dual-model approach needs either much more data or a fundamentally different way to train the bear side.
+
+Results: `experiments/dual_model_results.json`
+Script: `src/models/eval_dual_model.py`
+
+---
+
 ## Run folders
 
 Sweep 1 (3% TP, vary SL) — 6 configs × 10 folds = 60 models:
