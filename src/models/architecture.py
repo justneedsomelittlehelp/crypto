@@ -342,8 +342,8 @@ class DualBranchTransformerClassifier(nn.Module):
         self.vp_temporal_transformer = nn.TransformerEncoder(vp_temporal_layer, num_layers=n_temporal_layers)
 
         # ─────────────── CANDLE BRANCH ───────────────
-        # 7 candle features per day → embed_dim, with CLS for temporal pooling
-        self.candle_embed = nn.Linear(7, candle_embed_dim)
+        # 8 candle features per day (7 shape + 1 volume) → embed_dim, with CLS for temporal pooling
+        self.candle_embed = nn.Linear(8, candle_embed_dim)
         self.candle_cls = nn.Parameter(torch.randn(1, 1, candle_embed_dim) * 0.02)
         self.candle_pos = nn.Parameter(torch.randn(1, n_days + 1, candle_embed_dim) * 0.02)
         candle_layer = nn.TransformerEncoderLayer(
@@ -364,17 +364,22 @@ class DualBranchTransformerClassifier(nn.Module):
         self.fc2 = nn.Linear(fc_size, 1)
 
     def _aggregate_daily_candles(self, x: torch.Tensor) -> torch.Tensor:
-        """Aggregate 24 hourly bars per day into 1 daily candle (7 features per day).
+        """Aggregate 24 hourly bars per day into 1 daily candle (8 features per day).
+
+        Features: day_open, day_close, day_high, day_low, body, upper_wick, lower_wick,
+                  day_volume_ratio (mean of hourly volume_ratio across the day)
+
+        Volume context lets the model learn the user's trading rule:
+        "high-volume hammer = strong signal, low-volume hammer = noise"
 
         Args:
             x: (batch, 720, features) — full input
 
         Returns:
-            (batch, 30, 7) — daily candle features per day
+            (batch, 30, 8) — daily candle features per day
         """
         batch_size = x.shape[0]
         # Extract OHLC ratios (relative to each hour's close)
-        # Shape: (batch, 720)
         open_r = x[:, :, OHLC_OPEN_IDX]
         high_r = x[:, :, OHLC_HIGH_IDX]
         low_r = x[:, :, OHLC_LOW_IDX]
@@ -383,34 +388,23 @@ class DualBranchTransformerClassifier(nn.Module):
         open_r = open_r.view(batch_size, self.n_days, self.bars_per_day)
         high_r = high_r.view(batch_size, self.n_days, self.bars_per_day)
         low_r = low_r.view(batch_size, self.n_days, self.bars_per_day)
-        # close ratio = 1.0 by definition (each hour's close is the reference)
-        # but we need actual price ratios across the day, so reconstruct from close
         # Use log_return to track close changes
         log_ret = x[:, :, N_VP_BINS + DERIVED_FEATURE_COLS.index("log_return")]
         log_ret = log_ret.view(batch_size, self.n_days, self.bars_per_day)
 
-        # For each day, compute candle features RELATIVE to that day's close
-        # Day's close = close of last hour of that day
-        # Day's open = first hour's open = first_hour_close * first_hour_open_ratio
-        # We use the hour-level open_ratio (open_t / close_t) as a proxy
+        # Volume ratio (per-hour, normalized by 30-day rolling mean)
+        vol_ratio = x[:, :, N_VP_BINS + DERIVED_FEATURE_COLS.index("volume_ratio")]
+        vol_ratio = vol_ratio.view(batch_size, self.n_days, self.bars_per_day)
+        # Daily volume ratio: mean across the day's 24 hours
+        day_volume_ratio = vol_ratio.mean(dim=2)  # (batch, 30)
 
-        # Daily aggregation: open from first hour, high/low extremes, close = last hour
-        # All ratios are normalized relative to that day's close (last hour's close)
-        # Reconstruct: cumulative log returns from first hour of each day
-        day_cumret = log_ret.cumsum(dim=2)  # (batch, 30, 24)
-        # day's close ratio = exp(0) = 1 for last hour by definition
-        # day's first hour close (relative to last hour close) = exp(-day_cumret[:, :, -1])
-        # So price at hour h relative to day's close = exp(day_cumret[:, :, h] - day_cumret[:, :, -1])
-        rel_to_day_close = torch.exp(day_cumret - day_cumret[:, :, -1:])  # (batch, 30, 24)
+        # Reconstruct daily OHLC relative to day's close
+        day_cumret = log_ret.cumsum(dim=2)
+        rel_to_day_close = torch.exp(day_cumret - day_cumret[:, :, -1:])
 
-        # Day's open: first hour's open
-        # first_hour_open / last_hour_close = first_hour_open/first_hour_close * first_hour_close/last_hour_close
-        day_open = open_r[:, :, 0] * rel_to_day_close[:, :, 0]  # (batch, 30)
-        # Day's close: by construction = 1.0
+        day_open = open_r[:, :, 0] * rel_to_day_close[:, :, 0]
         day_close = torch.ones_like(day_open)
-        # Day's high: max across hours of (high_ratio * rel_to_day_close)
         day_high = (high_r * rel_to_day_close).max(dim=2).values
-        # Day's low: min across hours
         day_low = (low_r * rel_to_day_close).min(dim=2).values
 
         # Candle shape features
@@ -418,14 +412,12 @@ class DualBranchTransformerClassifier(nn.Module):
         body = day_close - day_open
         upper_wick = (day_high - torch.max(day_open, day_close)) / bar_height
         lower_wick = (torch.min(day_open, day_close) - day_low) / bar_height
-        body_dir = torch.sign(body)
 
-        # Stack: (batch, 30, 7)
+        # Stack: (batch, 30, 8) — 7 shape features + 1 volume
         candle = torch.stack([
             day_open, day_close, day_high, day_low,
-            body, upper_wick, lower_wick,
+            body, upper_wick, lower_wick, day_volume_ratio,
         ], dim=2)
-        # Replace any NaN/inf with 0 (defensive)
         candle = torch.nan_to_num(candle, nan=0.0, posinf=0.0, neginf=0.0)
         return candle
 

@@ -147,6 +147,16 @@ Add `day_volume_ratio` (total day volume / 30d daily average) as 8th feature per
 
 Param cost: +16 (just one more dim in the candle embed projection).
 
+---
+
+## Eval 2 — DualBranch v2 with volume context (pending)
+
+**Change:** Daily candle now has 8 features instead of 7. Added `day_volume_ratio` = mean of hourly `volume_ratio` across the day's 24 hours. The candle Transformer can now learn to weight candles by volume strength.
+
+**Hypothesis:** Volume-weighted candle attention should reduce noise from neutral low-volume candles, letting the model focus on the few high-confidence hammers/inverted hammers that the user actually trades on.
+
+Pending Colab run.
+
 Results: `experiments/dualbranch_compare_results.json`
 Script: `src/models/eval_dualbranch.py`
 Architecture: `src/models/architecture.py` → `DualBranchTransformerClassifier`
