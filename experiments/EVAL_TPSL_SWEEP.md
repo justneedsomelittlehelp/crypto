@@ -224,6 +224,62 @@ Script: `src/models/eval_dual_model.py`
 
 ---
 
+## Strategy Verification: Actual Model Predictions (2026-04-09)
+
+Trained temporal Transformer with FGI adaptive 7.5/3, saved per-sample predictions with regime labels. Computed exact per-regime EV for all strategies.
+
+*Note: this training run had higher variance (3 folds <50%). Numbers should be verified with Colab batch=512 run.*
+
+### Up/Down Prediction Accuracy
+
+| Metric | Overall | Bull regime | Bear regime |
+|--------|---------|-------------|-------------|
+| Accuracy | 55.9% | 48.0% | 66.0% |
+| Pred UP win rate (precision) | 57.6% | 34.7% | 78.9% |
+| Pred DOWN win rate (NPV) | 53.1% | 63.3% | 30.4% |
+| Actual UPs caught (recall) | 66.9% | 52.1% | 75.7% |
+| Actual DOWNs caught (specificity) | 43.2% | 45.8% | 34.3% |
+| Base rate (label=1) | — | 35.6% | 76.4% |
+
+**Interpretation:**
+- **Bull regime:** Only 35.6% of bars are label=1 (hard to hit 7.5% TP in any market). Model over-predicts UP (53.4% pred=1 vs 35.6% actual). DOWN predictions are good (63.3% correct).
+- **Bear regime:** 76.4% of bars are label=1 (easy to hit 3% TP on bounces). Model is strong on UP predictions (78.9%). DOWN predictions are weak (30.4%) — model rarely predicts down in bear and is often wrong when it does.
+
+### Per-Direction EV (actual, precision-based)
+
+| Direction | Bull regime | Bear regime |
+|-----------|-------------|-------------|
+| Long (pred=1) | +0.65% | +0.78% |
+| Short (pred=0) | -0.85% | +0.19% |
+
+Bull: long wins 7.5%, loses 3%. Bear (flipped): long wins 3%, loses 7.5%. Short is reversed.
+
+### Strategy Ranking (actual)
+
+| # | Strategy | Daily EV | Annual est. |
+|---|----------|----------|-------------|
+| **4** | **Long bull, both sides bear** | **+0.47%** | **~171%** |
+| 5 | Current (long both) | +0.45% | ~163% |
+| 3 | Both sides, both regimes | +0.25% | ~90% |
+| 2 | Long bull, short bear | +0.22% | ~79% |
+| 1 | Long bull only | +0.19% | ~71% |
+
+### Comparison: Estimated vs Actual
+
+| | Estimated (derived) | Actual |
+|--|---------------------|--------|
+| Strategy 4 daily EV | +0.645% | +0.47% |
+| Bear short EV/trade | +1.04% | +0.19% |
+| Bear long EV/trade | +0.68% | +0.78% |
+| Bull short EV/trade | -0.46% | -0.85% |
+
+Derived estimates were optimistic on bear shorts. Actual bear short EV is barely positive. Strategy 4 still wins but margin over strategy 5 is thin (+0.02%/day).
+
+Results: `experiments/strategy_results.json`
+Script: `src/models/eval_strategy.py`
+
+---
+
 ## Run folders
 
 Sweep 1 (3% TP, vary SL) — 6 configs × 10 folds = 60 models:
