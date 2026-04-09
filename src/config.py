@@ -140,6 +140,7 @@ CNN_DROPOUT = 0.2                           # Moderate regularization
 LEARNING_RATE = 5e-4
 EPOCHS = 50
 BATCH_SIZE = 64
+DATALOADER_WORKERS = 2                      # Parallel data loading threads
 EARLY_STOP_PATIENCE = 15                    # Stop if val loss doesn't improve for N epochs
 EXPERIMENTS_DIR = PROJECT_ROOT / "experiments"
 RUNS_DIR = EXPERIMENTS_DIR / "runs"

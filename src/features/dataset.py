@@ -18,6 +18,7 @@ from src.config import (
     LABEL_FGI_PATH,
     LABEL_NEUTRAL_MODE,
     LABEL_NEUTRAL_PEAKS_THRESHOLD,
+    DATALOADER_WORKERS,
     TRAIN_END,
     VAL_END,
 )
@@ -46,7 +47,7 @@ class TimeSeriesDataset(Dataset):
         self.lookback = lookback
         self.horizon = horizon
         self.labeled = labeled
-        self.data = df[feature_cols].values.astype(np.float32)
+        self.data = torch.from_numpy(df[feature_cols].values.astype(np.float32))
 
         if labeled:
             close = df["close"].values
@@ -61,12 +62,15 @@ class TimeSeriesDataset(Dataset):
                 for i in range(len(close) - horizon):
                     self.labels[i] = float(close[i + horizon] > close[i])
 
+            # Convert labels to tensor
+            self.labels = torch.from_numpy(self.labels)
+
             # Build valid index list: positions with a full lookback window and a valid label
             self.valid_indices = []
             max_start = len(self.data) - self.lookback
             for idx in range(max_start):
                 label_idx = idx + self.lookback - 1
-                if label_idx < len(self.labels) and not np.isnan(self.labels[label_idx]):
+                if label_idx < len(self.labels) and not torch.isnan(self.labels[label_idx]):
                     self.valid_indices.append(idx)
 
     @staticmethod
@@ -187,15 +191,28 @@ class TimeSeriesDataset(Dataset):
         else:
             real_idx = idx
 
-        window = self.data[real_idx : real_idx + self.lookback]
-        x = torch.from_numpy(window)
+        x = self.data[real_idx : real_idx + self.lookback]
 
         if self.labeled:
             label_idx = real_idx + self.lookback - 1
-            y = torch.tensor(self.labels[label_idx], dtype=torch.float32)
+            y = self.labels[label_idx]
             return x, y
 
         return (x,)
+
+
+def make_loader(ds, batch_size, shuffle=False):
+    """Create DataLoader with optimal settings for GPU training."""
+    import torch
+    use_cuda = torch.cuda.is_available()
+    return DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=DATALOADER_WORKERS if use_cuda else 0,
+        pin_memory=use_cuda,
+        persistent_workers=use_cuda and DATALOADER_WORKERS > 0,
+    )
 
 
 def get_dataloaders(
@@ -209,8 +226,8 @@ def get_dataloaders(
     val_ds = TimeSeriesDataset(val_df, lookback=lookback)
     test_ds = TimeSeriesDataset(test_df, lookback=lookback)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+    train_loader = make_loader(train_ds, batch_size, shuffle=True)
+    val_loader = make_loader(val_ds, batch_size)
+    test_loader = make_loader(test_ds, batch_size)
 
     return train_loader, val_loader, test_loader
