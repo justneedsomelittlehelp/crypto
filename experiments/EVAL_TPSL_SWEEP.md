@@ -228,52 +228,64 @@ Script: `src/models/eval_dual_model.py`
 
 Trained temporal Transformer with FGI adaptive 7.5/3, saved per-sample predictions with regime labels. Computed exact per-regime EV for all strategies.
 
-*Note: this training run had higher variance (3 folds <50%). Numbers should be verified with Colab batch=512 run.*
+**Two runs:** Mac (batch=64, noisy) and Colab (batch=512, clean). Colab numbers are the trustworthy ones — better gradient stability, more epochs to convergence.
 
-### Up/Down Prediction Accuracy
+### Up/Down Prediction Accuracy (Colab batch=512)
 
 | Metric | Overall | Bull regime | Bear regime |
 |--------|---------|-------------|-------------|
-| Accuracy | 55.9% | 48.0% | 66.0% |
-| Pred UP win rate (precision) | 57.6% | 34.7% | 78.9% |
-| Pred DOWN win rate (NPV) | 53.1% | 63.3% | 30.4% |
-| Actual UPs caught (recall) | 66.9% | 52.1% | 75.7% |
-| Actual DOWNs caught (specificity) | 43.2% | 45.8% | 34.3% |
+| Accuracy | 60.3% | 52.9% | 69.3% |
+| Pred UP win rate (precision) | 61.4% | 38.5% | 80.9% |
+| Pred DOWN win rate (NPV) | 58.6% | 67.1% | 36.4% |
 | Base rate (label=1) | — | 35.6% | 76.4% |
 
 **Interpretation:**
 - **Bull regime:** Only 35.6% of bars are label=1 (hard to hit 7.5% TP in any market). Model over-predicts UP (53.4% pred=1 vs 35.6% actual). DOWN predictions are good (63.3% correct).
 - **Bear regime:** 76.4% of bars are label=1 (easy to hit 3% TP on bounces). Model is strong on UP predictions (78.9%). DOWN predictions are weak (30.4%) — model rarely predicts down in bear and is often wrong when it does.
 
-### Per-Direction EV (actual, precision-based)
+### Per-Direction EV (Colab batch=512)
 
 | Direction | Bull regime | Bear regime |
 |-----------|-------------|-------------|
-| Long (pred=1) | +0.65% | +0.78% |
-| Short (pred=0) | -0.85% | +0.19% |
+| Long (pred=1) | **+1.04%** | **+1.00%** |
+| Short (pred=0) | -0.45% | **+0.82%** |
 
 Bull: long wins 7.5%, loses 3%. Bear (flipped): long wins 3%, loses 7.5%. Short is reversed.
 
-### Strategy Ranking (actual)
+### Strategy Ranking (Colab batch=512)
 
 | # | Strategy | Daily EV | Annual est. |
 |---|----------|----------|-------------|
-| **4** | **Long bull, both sides bear** | **+0.47%** | **~171%** |
-| 5 | Current (long both) | +0.45% | ~163% |
-| 3 | Both sides, both regimes | +0.25% | ~90% |
-| 2 | Long bull, short bear | +0.22% | ~79% |
-| 1 | Long bull only | +0.19% | ~71% |
+| **4** | **Long bull, both sides bear** | **+0.71%** | **~258%** |
+| 5 | Current (long both) | +0.61% | ~223% |
+| 3 | Both sides, both regimes | +0.58% | ~211% |
+| 2 | Long bull, short bear | +0.38% | ~140% |
+| 1 | Long bull only | +0.29% | ~105% |
 
-### Comparison: Estimated vs Actual
+### After Trading Fees (0.52% round trip — Kraken maker+taker)
 
-| | Estimated (derived) | Actual |
-|--|---------------------|--------|
-| Strategy 4 daily EV | +0.645% | +0.47% |
-| Bear short EV/trade | +1.04% | +0.19% |
-| Bear long EV/trade | +0.68% | +0.78% |
-| Bull short EV/trade | -0.46% | -0.85% |
+| Direction | Gross EV | After fees | Net |
+|-----------|----------|------------|-----|
+| Bull long | +1.04% | -0.52% | **+0.52%** |
+| Bear long | +1.00% | -0.52% | **+0.48%** |
+| Bear short | +0.82% | -0.52% | **+0.30%** |
+| Bull short | -0.45% | -0.52% | -0.97% (skip) |
 
-Derived estimates were optimistic on bear shorts. Actual bear short EV is barely positive. Strategy 4 still wins but margin over strategy 5 is thin (+0.02%/day).
+**All three trade directions are net-positive after fees** — first time we're meaningfully profitable.
+
+### Mac (batch=64, noisy) vs Colab (batch=512, clean)
+
+| Metric | Mac | Colab |
+|--------|-----|-------|
+| Bull long EV | +0.65% | +1.04% |
+| Bear long EV | +0.78% | +1.00% |
+| Bear short EV | +0.19% | +0.82% |
+| Strategy 4 daily | +0.47% | +0.71% |
+
+The Colab run with batch=512 produced significantly better numbers because:
+1. Smoother gradients → more stable convergence
+2. Best epoch often at 9-15+ instead of epoch 1 (model actually learns instead of getting lucky)
+3. Lower validation loss → better calibrated predictions
 
 Results: `experiments/strategy_results.json`
 Script: `src/models/eval_strategy.py`
