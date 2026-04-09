@@ -436,13 +436,12 @@ class DualBranchTransformerClassifier(nn.Module):
         other = x[:, -1, N_VP_BINS:]          # (batch, N_OTHER) — last bar's other features
 
         # ─────────────── VP BRANCH ───────────────
-        # Reshape and sum hourly VP into daily VP
-        vp_daily = vp_bins.view(batch_size, self.n_days, self.bars_per_day, N_VP_BINS)
-        vp_daily = vp_daily.sum(dim=2)                             # (batch, 30, 50)
-
-        # Normalize per day
-        day_max = vp_daily.max(dim=2, keepdim=True).values.clamp(min=1e-8)
-        vp_daily = vp_daily / day_max
+        # Sample one VP per day: the last hour of each day.
+        # Each hourly row already contains a complete 180-day VP centered on that hour's
+        # close price (sum=1 normalized in the data pipeline). Picking the last hour of each
+        # day gives us 30 end-of-day VP snapshots — exactly what a trader would see.
+        # No further normalization needed; matches the pipeline's normalization scheme.
+        vp_daily = vp_bins[:, self.bars_per_day - 1::self.bars_per_day, :]  # (batch, 30, 50)
 
         # Stage 1: spatial attention (batched across days) with CLS pooling
         flat_vp = vp_daily.reshape(batch_size * self.n_days, N_VP_BINS, 1)

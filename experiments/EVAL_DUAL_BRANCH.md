@@ -16,7 +16,7 @@ Input: (batch, 720, 68)   720 = 30 days × 24 hours, 68 features
   ┌──────────────┐                                                          ┌──────────────────┐
   │  VP BRANCH   │                                                          │  CANDLE BRANCH   │
   └──────────────┘                                                          └──────────────────┘
-  Sum 24h VP per day → (batch, 30, 50)                                      Aggregate hourly OHLC into
+  Sample end-of-day VP per day → (batch, 30, 50)                            Aggregate hourly OHLC into
        ↓                                                                    daily candle (rolling 24h):
   Stage 1: spatial attention                                                - day_open (first hour open)
   (50 bins, embed=32, 1 layer)                                              - day_close (last hour close)
@@ -49,6 +49,11 @@ The VP captures ceiling/floor structure. The candle captures directional momentu
 
 **Why daily candles, not hourly:**
 1h candles are noise. A 0.3% body with a 0.6% wick on 1h tells you nothing. The user only reads 1d candles for pattern detection. The model should see what the user sees.
+
+**Why VP sampling (not aggregation):**
+Each hourly row already contains a complete 180-day VP centered on that hour's close, sum=1 normalized. We don't aggregate 24 hourly VPs into a daily VP — we just **sample one per day** (the last hour, which has a VP centered on end-of-day close). This gives us 30 daily snapshots that match exactly what a trader sees when checking VP at end of day. No averaging artifacts, no per-day re-normalization needed, no magnitude distortion.
+
+The 1h data resolution is just for sample generation (24x more training samples via sliding window). The actual VP is always a 180-day window.
 
 **Why rolling 24h windows:**
 Each hour, the model gets a "1-day candle ending now." This rolls forward by 1h between consecutive samples (matches the existing 1h prediction frequency). Computed from raw OHLC inside the model's forward pass — no new data needed.
