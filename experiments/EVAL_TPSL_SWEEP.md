@@ -234,3 +234,19 @@ Sweep 2 (3% SL, vary TP) — 5 configs × 10 folds = 50 models:
 
 Combined analysis: `experiments/sweep_analysis_combined.json`
 Scripts: `src/models/sweep_tpsl.py`, `src/models/sweep_tpsl_wide.py`, `src/models/analyze_sweep.py`
+
+---
+
+## Log Index
+
+All training logs are in `logs/`. Not committed (gitignored).
+
+| Log file | Script | What it tested |
+|----------|--------|---------------|
+| `sweep_output.log` | `sweep_tpsl.py` | Sweep 1: fixed 3% TP, vary SL (6 configs) |
+| `sweep_output_wide.log` | `sweep_tpsl_wide.py` | Sweep 2: fixed 3% SL, vary TP (5 configs) |
+| `regime_compare_output.log` | `eval_regime_compare.py` | Adaptive vs Fixed 7.5/3 |
+| `regime_fgi_output.log` | `eval_regime_fgi.py` | FGI vs SMA regime detection |
+| `dual_model_output.log` | `eval_dual_model.py` | Dual model (bull long + bear short) |
+| `temporal_output.log` | `eval_temporal.py` | Temporal Transformer vs current |
+| `strategy_temporal_output.log` | `eval_strategy.py` | Strategy EV verification (temporal model) |

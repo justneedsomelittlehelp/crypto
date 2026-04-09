@@ -23,6 +23,9 @@ data/
 # Experiment run folders (model weights, metrics)
 experiments/runs/
 
+# Training logs
+logs/
+
 # OS
 .DS_Store
 Thumbs.db
