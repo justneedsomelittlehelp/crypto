@@ -57,6 +57,7 @@ def train_model(
     warmup_epochs: int = 5,
     weight_decay: float = 0.0,
     seed: int | None = None,
+    grad_clip: float = 1.0,
 ) -> dict:
     device = get_device()
 
@@ -99,8 +100,9 @@ def train_model(
             logits = model(x)
             loss = criterion(logits, y)
             loss.backward()
-            # Gradient clipping to prevent NaN explosions on CUDA / Transformer instability
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # Optional gradient clipping (set grad_clip=0 to disable)
+            if grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip)
             optimizer.step()
 
             train_loss_sum += loss.item() * len(y)
