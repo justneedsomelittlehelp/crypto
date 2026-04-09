@@ -51,17 +51,23 @@ def compute_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     df["body_dir"] = np.sign(df["close"] - df["open"])
 
     # Normalized OHLC for in-model daily candle aggregation.
-    # Centered at 0 (subtract 1) so they're symmetric around the close price.
-    df["ohlc_open_ratio"] = df["open"] / df["close"] - 1.0
-    df["ohlc_high_ratio"] = df["high"] / df["close"] - 1.0
-    df["ohlc_low_ratio"] = df["low"] / df["close"] - 1.0
+    # Stored as ratios to current close (centered at 1.0). The candle branch
+    # aggregation logic depends on these being multiplicative ratios — do NOT
+    # subtract 1 here. The model handles them correctly as-is.
+    df["ohlc_open_ratio"] = df["open"] / df["close"]
+    df["ohlc_high_ratio"] = df["high"] / df["close"]
+    df["ohlc_low_ratio"] = df["low"] / df["close"]
 
     # ── Walk-forward-safe z-score normalization ──
     # Use expanding window stats so each row only sees its own past data.
     # Prevents data leakage in walk-forward training.
+    #
+    # NOTE: log_return is NOT scaled because the candle branch uses raw log_return
+    # for daily OHLC reconstruction (cumulative sum + exp). Scaling would break
+    # the math. log_return is already small (-0.18 to 0.20), no scaling needed.
     min_periods = VOLUME_ROLL_WINDOW_BARS  # 30 days warmup before any z-scoring
 
-    for col in ["volume_ratio", "log_return", "bar_range", "bar_body"]:
+    for col in ["volume_ratio", "bar_range", "bar_body"]:
         # Log-transform volume_ratio first (long-tail compression)
         if col == "volume_ratio":
             base = np.log(df[col] + 1.0)
