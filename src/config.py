@@ -78,6 +78,7 @@ VOLUME_ROLL_WINDOW_BARS = VOLUME_ROLL_WINDOW_DAYS * BARS_PER_DAY
 DERIVED_FEATURE_COLS = [
     "log_return", "bar_range", "bar_body", "volume_ratio",
     "upper_wick", "lower_wick", "body_dir",
+    "ohlc_open_ratio", "ohlc_high_ratio", "ohlc_low_ratio",
 ]
 VP_STRUCTURE_COLS = [
     "vp_ceiling_dist",

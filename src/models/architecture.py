@@ -95,6 +95,12 @@ class LSTMClassifier(nn.Module):
 N_VP_BINS = REL_BIN_COUNT  # 50
 N_OTHER_FEATURES = len(DERIVED_FEATURE_COLS) + len(VP_STRUCTURE_COLS)
 
+# OHLC ratio indices within DERIVED_FEATURE_COLS (relative to VP bins)
+# Used by dual-branch transformer to extract per-day candle features
+OHLC_OPEN_IDX = N_VP_BINS + DERIVED_FEATURE_COLS.index("ohlc_open_ratio")
+OHLC_HIGH_IDX = N_VP_BINS + DERIVED_FEATURE_COLS.index("ohlc_high_ratio")
+OHLC_LOW_IDX = N_VP_BINS + DERIVED_FEATURE_COLS.index("ohlc_low_ratio")
+
 
 class TransformerClassifier(nn.Module):
     """Tiny Transformer that uses self-attention across VP bins.
@@ -260,6 +266,201 @@ class TemporalTransformerClassifier(nn.Module):
         # Combine with non-VP features
         combined = torch.cat([pooled, other], dim=1)
 
+        out = self.dropout(combined)
+        out = self.relu(self.fc1(out))
+        out = self.dropout(out)
+        logit = self.fc2(out).squeeze(-1)
+        return logit
+
+
+class DualBranchTransformerClassifier(nn.Module):
+    """Dual-branch Transformer: VP branch + Candle branch, merged at FC layer.
+
+    VP branch (same as TemporalTransformerClassifier):
+        - Stage 1: spatial attention across 50 VP bins per day (shared weights)
+        - Stage 2: temporal attention across 30 daily VP embeddings
+        - Output: (batch, vp_embed_dim)
+
+    Candle branch (NEW):
+        - Aggregates 24 hourly bars into 1 daily candle: (open, high, low, close)
+        - Computes 7 candle features per day: open_ratio, close_ratio, high_ratio,
+          low_ratio, body, upper_wick, lower_wick
+        - Project 7 → candle_embed_dim (16)
+        - Temporal attention across 30 daily candle embeddings
+        - Output: (batch, candle_embed_dim)
+
+    Merging:
+        concat(vp_pooled, candle_pooled, last_other_features) → FC → logit
+
+    The two branches don't talk to each other until the FC layer, mirroring
+    how a trader reads VP and candles separately then combines mentally.
+    """
+
+    def __init__(
+        self,
+        vp_embed_dim: int = 32,
+        candle_embed_dim: int = 16,
+        n_heads: int = 4,
+        n_spatial_layers: int = 1,
+        n_temporal_layers: int = 1,
+        n_candle_layers: int = 1,
+        fc_size: int = 64,
+        dropout: float = 0.15,
+        n_days: int = 30,
+        bars_per_day: int = 24,
+    ):
+        super().__init__()
+        self.n_days = n_days
+        self.bars_per_day = bars_per_day
+        self.vp_embed_dim = vp_embed_dim
+        self.candle_embed_dim = candle_embed_dim
+
+        # ─────────────── VP BRANCH ───────────────
+        # Stage 1: spatial attention across VP bins
+        self.bin_embed = nn.Linear(1, vp_embed_dim)
+        self.spatial_pos = nn.Parameter(torch.randn(1, N_VP_BINS, vp_embed_dim) * 0.02)
+        spatial_layer = nn.TransformerEncoderLayer(
+            d_model=vp_embed_dim,
+            nhead=n_heads,
+            dim_feedforward=vp_embed_dim * 2,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.spatial_transformer = nn.TransformerEncoder(spatial_layer, num_layers=n_spatial_layers)
+
+        # Stage 2: temporal attention across days for VP
+        self.vp_temporal_pos = nn.Parameter(torch.randn(1, n_days, vp_embed_dim) * 0.02)
+        vp_temporal_layer = nn.TransformerEncoderLayer(
+            d_model=vp_embed_dim,
+            nhead=n_heads,
+            dim_feedforward=vp_embed_dim * 2,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.vp_temporal_transformer = nn.TransformerEncoder(vp_temporal_layer, num_layers=n_temporal_layers)
+
+        # ─────────────── CANDLE BRANCH ───────────────
+        # 7 candle features per day → embed_dim
+        self.candle_embed = nn.Linear(7, candle_embed_dim)
+        self.candle_pos = nn.Parameter(torch.randn(1, n_days, candle_embed_dim) * 0.02)
+        candle_layer = nn.TransformerEncoderLayer(
+            d_model=candle_embed_dim,
+            nhead=2,  # smaller embed_dim, fewer heads
+            dim_feedforward=candle_embed_dim * 2,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.candle_transformer = nn.TransformerEncoder(candle_layer, num_layers=n_candle_layers)
+
+        # ─────────────── MERGE ───────────────
+        # Concat: VP pooled + Candle pooled + last bar's non-VP features
+        merged_dim = vp_embed_dim + candle_embed_dim + N_OTHER_FEATURES
+        self.fc1 = nn.Linear(merged_dim, fc_size)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(fc_size, 1)
+
+    def _aggregate_daily_candles(self, x: torch.Tensor) -> torch.Tensor:
+        """Aggregate 24 hourly bars per day into 1 daily candle (7 features per day).
+
+        Args:
+            x: (batch, 720, features) — full input
+
+        Returns:
+            (batch, 30, 7) — daily candle features per day
+        """
+        batch_size = x.shape[0]
+        # Extract OHLC ratios (relative to each hour's close)
+        # Shape: (batch, 720)
+        open_r = x[:, :, OHLC_OPEN_IDX]
+        high_r = x[:, :, OHLC_HIGH_IDX]
+        low_r = x[:, :, OHLC_LOW_IDX]
+
+        # Reshape to days: (batch, 30, 24)
+        open_r = open_r.view(batch_size, self.n_days, self.bars_per_day)
+        high_r = high_r.view(batch_size, self.n_days, self.bars_per_day)
+        low_r = low_r.view(batch_size, self.n_days, self.bars_per_day)
+        # close ratio = 1.0 by definition (each hour's close is the reference)
+        # but we need actual price ratios across the day, so reconstruct from close
+        # Use log_return to track close changes
+        log_ret = x[:, :, N_VP_BINS + DERIVED_FEATURE_COLS.index("log_return")]
+        log_ret = log_ret.view(batch_size, self.n_days, self.bars_per_day)
+
+        # For each day, compute candle features RELATIVE to that day's close
+        # Day's close = close of last hour of that day
+        # Day's open = first hour's open = first_hour_close * first_hour_open_ratio
+        # We use the hour-level open_ratio (open_t / close_t) as a proxy
+
+        # Daily aggregation: open from first hour, high/low extremes, close = last hour
+        # All ratios are normalized relative to that day's close (last hour's close)
+        # Reconstruct: cumulative log returns from first hour of each day
+        day_cumret = log_ret.cumsum(dim=2)  # (batch, 30, 24)
+        # day's close ratio = exp(0) = 1 for last hour by definition
+        # day's first hour close (relative to last hour close) = exp(-day_cumret[:, :, -1])
+        # So price at hour h relative to day's close = exp(day_cumret[:, :, h] - day_cumret[:, :, -1])
+        rel_to_day_close = torch.exp(day_cumret - day_cumret[:, :, -1:])  # (batch, 30, 24)
+
+        # Day's open: first hour's open
+        # first_hour_open / last_hour_close = first_hour_open/first_hour_close * first_hour_close/last_hour_close
+        day_open = open_r[:, :, 0] * rel_to_day_close[:, :, 0]  # (batch, 30)
+        # Day's close: by construction = 1.0
+        day_close = torch.ones_like(day_open)
+        # Day's high: max across hours of (high_ratio * rel_to_day_close)
+        day_high = (high_r * rel_to_day_close).max(dim=2).values
+        # Day's low: min across hours
+        day_low = (low_r * rel_to_day_close).min(dim=2).values
+
+        # Candle shape features
+        bar_height = (day_high - day_low).clamp(min=1e-8)
+        body = day_close - day_open
+        upper_wick = (day_high - torch.max(day_open, day_close)) / bar_height
+        lower_wick = (torch.min(day_open, day_close) - day_low) / bar_height
+        body_dir = torch.sign(body)
+
+        # Stack: (batch, 30, 7)
+        candle = torch.stack([
+            day_open, day_close, day_high, day_low,
+            body, upper_wick, lower_wick,
+        ], dim=2)
+        # Replace any NaN/inf with 0 (defensive)
+        candle = torch.nan_to_num(candle, nan=0.0, posinf=0.0, neginf=0.0)
+        return candle
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (batch, lookback=720, features)
+        batch_size = x.shape[0]
+        vp_bins = x[:, :, :N_VP_BINS]        # (batch, 720, 50)
+        other = x[:, -1, N_VP_BINS:]          # (batch, N_OTHER) — last bar's other features
+
+        # ─────────────── VP BRANCH ───────────────
+        # Reshape and sum hourly VP into daily VP
+        vp_daily = vp_bins.view(batch_size, self.n_days, self.bars_per_day, N_VP_BINS)
+        vp_daily = vp_daily.sum(dim=2)                             # (batch, 30, 50)
+
+        # Normalize per day
+        day_max = vp_daily.max(dim=2, keepdim=True).values.clamp(min=1e-8)
+        vp_daily = vp_daily / day_max
+
+        # Stage 1: spatial attention (batched across days)
+        flat_vp = vp_daily.reshape(batch_size * self.n_days, N_VP_BINS, 1)
+        flat_tokens = self.bin_embed(flat_vp) + self.spatial_pos
+        flat_attended = self.spatial_transformer(flat_tokens)
+        flat_pooled = flat_attended.mean(dim=1)
+        vp_temporal_input = flat_pooled.view(batch_size, self.n_days, self.vp_embed_dim)
+
+        # Stage 2: temporal attention across VP days
+        vp_temporal_input = vp_temporal_input + self.vp_temporal_pos
+        vp_temporal_out = self.vp_temporal_transformer(vp_temporal_input)
+        vp_pooled = vp_temporal_out.mean(dim=1)                    # (batch, vp_embed_dim)
+
+        # ─────────────── CANDLE BRANCH ───────────────
+        candles = self._aggregate_daily_candles(x)                 # (batch, 30, 7)
+        candle_tokens = self.candle_embed(candles) + self.candle_pos  # (batch, 30, candle_embed_dim)
+        candle_attended = self.candle_transformer(candle_tokens)    # (batch, 30, candle_embed_dim)
+        candle_pooled = candle_attended.mean(dim=1)                 # (batch, candle_embed_dim)
+
+        # ─────────────── MERGE ───────────────
+        combined = torch.cat([vp_pooled, candle_pooled, other], dim=1)
         out = self.dropout(combined)
         out = self.relu(self.fc1(out))
         out = self.dropout(out)

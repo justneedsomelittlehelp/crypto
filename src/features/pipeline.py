@@ -44,11 +44,17 @@ def compute_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     ).mean()
     df["volume_ratio"] = df[VOLUME_COL] / rolling_mean
 
-    # Candle shape features
+    # Candle shape features (1h bar — kept for backwards compat, mostly noise)
     bar_height = (df["high"] - df["low"]).clip(lower=1e-10)
     df["upper_wick"] = (df["high"] - df[["open", "close"]].max(axis=1)) / bar_height
     df["lower_wick"] = (df[["open", "close"]].min(axis=1) - df["low"]) / bar_height
     df["body_dir"] = np.sign(df["close"] - df["open"])
+
+    # Normalized OHLC for in-model daily candle aggregation
+    # Stored as ratios to current close so they're scale-invariant
+    df["ohlc_open_ratio"] = df["open"] / df["close"]
+    df["ohlc_high_ratio"] = df["high"] / df["close"]
+    df["ohlc_low_ratio"] = df["low"] / df["close"]
 
     return df
 
