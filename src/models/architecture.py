@@ -232,26 +232,23 @@ class TemporalTransformerClassifier(nn.Module):
         vp_bins = x[:, :, :N_VP_BINS]        # (batch, 720, 50)
         other = x[:, -1, N_VP_BINS:]          # (batch, N_OTHER)
 
-        # Stage 1: spatial attention per day
-        daily_embeds = []
-        for d in range(self.n_days):
-            start = d * self.bars_per_day
-            end = start + self.bars_per_day
-            day_vp = vp_bins[:, start:end, :].sum(dim=1)  # (batch, 50)
+        # Stage 1: spatial attention — batched across all 30 days at once
+        # Reshape: (batch, 720, 50) → (batch, 30, 24, 50) → sum hours → (batch, 30, 50)
+        vp_daily = vp_bins.view(batch_size, self.n_days, self.bars_per_day, N_VP_BINS)
+        vp_daily = vp_daily.sum(dim=2)                             # (batch, 30, 50)
 
-            # Normalize per day per sample
-            day_max = day_vp.max(dim=1, keepdim=True).values.clamp(min=1e-8)
-            day_vp = day_vp / day_max
+        # Normalize per day per sample
+        day_max = vp_daily.max(dim=2, keepdim=True).values.clamp(min=1e-8)
+        vp_daily = vp_daily / day_max                              # (batch, 30, 50)
 
-            # Each bin as token → embed → spatial attention
-            tokens = day_vp.unsqueeze(-1)                          # (batch, 50, 1)
-            tokens = self.bin_embed(tokens) + self.spatial_pos     # (batch, 50, embed_dim)
-            attended = self.spatial_transformer(tokens)             # (batch, 50, embed_dim)
-            day_embed = attended.mean(dim=1)                       # (batch, embed_dim)
-            daily_embeds.append(day_embed)
+        # Flatten batch and days for one Transformer call: (batch*30, 50, 1)
+        flat_vp = vp_daily.reshape(batch_size * self.n_days, N_VP_BINS, 1)
+        flat_tokens = self.bin_embed(flat_vp) + self.spatial_pos   # (batch*30, 50, embed_dim)
+        flat_attended = self.spatial_transformer(flat_tokens)       # (batch*30, 50, embed_dim)
+        flat_pooled = flat_attended.mean(dim=1)                    # (batch*30, embed_dim)
 
-        # Stack daily embeddings: (batch, 30, embed_dim)
-        temporal_input = torch.stack(daily_embeds, dim=1)
+        # Unflatten: (batch, 30, embed_dim)
+        temporal_input = flat_pooled.view(batch_size, self.n_days, self.embed_dim)
 
         # Stage 2: temporal attention across days
         temporal_input = temporal_input + self.temporal_pos
