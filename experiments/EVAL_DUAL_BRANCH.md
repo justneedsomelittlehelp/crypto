@@ -227,6 +227,25 @@ Total features dropped from 68 → 60.
 | 9 | 59.6% | 59.0% | 60.0% |
 | 10 | 66.9% | 75.8% | 72.7% |
 
+### IMPORTANT — v3 had a broken candle branch (discovered after the run)
+
+The v3 pipeline overhaul introduced two bugs that broke the candle reconstruction in `_aggregate_daily_candles`:
+
+1. **OHLC ratios were subtracted by 1** (centered at 0 instead of 1). The candle reconstruction logic uses these as multiplicative ratios to reconstruct daily OHLC. With the subtraction, `day_open` was near 0 instead of near 1, making `body = day_close - day_open ≈ 1.0` (vs the expected ~0.001) and `upper_wick / bar_height` exploded to magnitudes of 350.
+
+2. **`log_return` was z-scored**. The candle reconstruction uses `cumsum(log_return) → exp` to track price movement within each day. After scaling, these "log returns" no longer represented actual returns. Cumulative sum + exp produced `day_open` values up to 42 and `day_high` up to 63 — total nonsense.
+
+**Why v3 didn't crash:** The Linear projection (8→16) and LayerNorm in the candle Transformer absorbed the absurd values without producing inf/NaN on Mac CPU at batch=64. The model likely learned to **ignore** the candle branch entirely (it was pure noise) — meaning v3's results essentially measure "VP branch only with broken candle noise."
+
+**Implication:** The +1.10% bull long EV improvement attributed to v3 is suspect. It could be from:
+- The pipeline scaling fixes (VP branch saw cleaner features) — real
+- Random run-to-run variance — possible
+- Removing VP structure features — possible
+
+We can't cleanly attribute it. v1 and v2 had **working** candle branches, so their results are reliable.
+
+**Fix committed 2026-04-09:** Reverted the OHLC subtraction and removed `log_return` from the z-score loop. Verified: candles now produce sensible values (body ~0, wicks in [0, 1]).
+
 ### Verdict: Mixed
 
 **Wins:**
