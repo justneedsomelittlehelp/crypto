@@ -56,16 +56,33 @@ Each hour, the model gets a "1-day candle ending now." This rolls forward by 1h 
 **Why merge at FC layer (not earlier):**
 Cross-attention between VP and candles would force premature interaction. Concatenating at FC lets each branch produce a clean summary first, then learns the conditional logic ("when VP says ceiling AND candle says rejection wick → strong sell") in the final layer.
 
+**Why CLS token pooling instead of mean pool:**
+Mean pool averages all token positions equally, which destroys position-aware information. For VP spatial attention, mean pool would lose "peak at bin 12 + peak at bin 38" — these become indistinguishable from a flat distribution with the same total mass. For temporal attention, mean pool treats day 1 and day 30 equally, destroying recency.
+
+CLS tokens (the standard BERT/ViT approach) solve this:
+1. Prepend a learnable [CLS] token at position 0
+2. Self-attention runs as normal — CLS attends to all real tokens, they attend to it
+3. Take only the CLS token's output as the summary
+4. The CLS token learns to write "what's important about this sequence" into itself
+
+Applied to all 3 attention stages:
+- **Spatial CLS:** learns to summarize VP shape (peaks, gaps, distribution)
+- **VP temporal CLS:** learns to summarize VP evolution (persistence, breakouts)
+- **Candle temporal CLS:** learns to summarize candle pattern sequence (reversals, momentum)
+
+Param cost: ~160 (3 CLS tokens + extended positional encodings). Negligible.
+
 ## Parameter budget
 
 | Component | Params |
 |-----------|--------|
-| VP branch (current temporal) | 23,041 |
+| VP branch (with CLS pooling) | ~23,200 |
 | Candle embed (7→16) | 128 |
-| Candle positional encoding | 480 |
+| Candle positional encoding (incl. CLS) | 496 |
 | Candle Transformer (1 layer, embed=16, 2 heads) | ~2,200 |
+| Candle CLS token | 16 |
 | Wider FC (concat 16 extra) | 1,048 |
-| **Total** | **~26,900** |
+| **Total** | **27,057** |
 
 17% larger than TemporalTransformer. Still within data budget (75k samples / 27k params = 2.8x).
 

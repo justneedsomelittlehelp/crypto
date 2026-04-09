@@ -316,9 +316,10 @@ class DualBranchTransformerClassifier(nn.Module):
         self.candle_embed_dim = candle_embed_dim
 
         # ─────────────── VP BRANCH ───────────────
-        # Stage 1: spatial attention across VP bins
+        # Stage 1: spatial attention across VP bins (50 bins + 1 CLS = 51 tokens)
         self.bin_embed = nn.Linear(1, vp_embed_dim)
-        self.spatial_pos = nn.Parameter(torch.randn(1, N_VP_BINS, vp_embed_dim) * 0.02)
+        self.spatial_cls = nn.Parameter(torch.randn(1, 1, vp_embed_dim) * 0.02)
+        self.spatial_pos = nn.Parameter(torch.randn(1, N_VP_BINS + 1, vp_embed_dim) * 0.02)
         spatial_layer = nn.TransformerEncoderLayer(
             d_model=vp_embed_dim,
             nhead=n_heads,
@@ -328,8 +329,9 @@ class DualBranchTransformerClassifier(nn.Module):
         )
         self.spatial_transformer = nn.TransformerEncoder(spatial_layer, num_layers=n_spatial_layers)
 
-        # Stage 2: temporal attention across days for VP
-        self.vp_temporal_pos = nn.Parameter(torch.randn(1, n_days, vp_embed_dim) * 0.02)
+        # Stage 2: temporal attention across days for VP (30 days + 1 CLS = 31 tokens)
+        self.vp_temporal_cls = nn.Parameter(torch.randn(1, 1, vp_embed_dim) * 0.02)
+        self.vp_temporal_pos = nn.Parameter(torch.randn(1, n_days + 1, vp_embed_dim) * 0.02)
         vp_temporal_layer = nn.TransformerEncoderLayer(
             d_model=vp_embed_dim,
             nhead=n_heads,
@@ -340,9 +342,10 @@ class DualBranchTransformerClassifier(nn.Module):
         self.vp_temporal_transformer = nn.TransformerEncoder(vp_temporal_layer, num_layers=n_temporal_layers)
 
         # ─────────────── CANDLE BRANCH ───────────────
-        # 7 candle features per day → embed_dim
+        # 7 candle features per day → embed_dim, with CLS for temporal pooling
         self.candle_embed = nn.Linear(7, candle_embed_dim)
-        self.candle_pos = nn.Parameter(torch.randn(1, n_days, candle_embed_dim) * 0.02)
+        self.candle_cls = nn.Parameter(torch.randn(1, 1, candle_embed_dim) * 0.02)
+        self.candle_pos = nn.Parameter(torch.randn(1, n_days + 1, candle_embed_dim) * 0.02)
         candle_layer = nn.TransformerEncoderLayer(
             d_model=candle_embed_dim,
             nhead=2,  # smaller embed_dim, fewer heads
@@ -441,23 +444,34 @@ class DualBranchTransformerClassifier(nn.Module):
         day_max = vp_daily.max(dim=2, keepdim=True).values.clamp(min=1e-8)
         vp_daily = vp_daily / day_max
 
-        # Stage 1: spatial attention (batched across days)
+        # Stage 1: spatial attention (batched across days) with CLS pooling
         flat_vp = vp_daily.reshape(batch_size * self.n_days, N_VP_BINS, 1)
-        flat_tokens = self.bin_embed(flat_vp) + self.spatial_pos
-        flat_attended = self.spatial_transformer(flat_tokens)
-        flat_pooled = flat_attended.mean(dim=1)
-        vp_temporal_input = flat_pooled.view(batch_size, self.n_days, self.vp_embed_dim)
+        flat_tokens = self.bin_embed(flat_vp)                              # (batch*30, 50, embed)
+        # Prepend CLS token
+        cls_spatial = self.spatial_cls.expand(batch_size * self.n_days, -1, -1)
+        flat_tokens = torch.cat([cls_spatial, flat_tokens], dim=1)         # (batch*30, 51, embed)
+        flat_tokens = flat_tokens + self.spatial_pos                       # add positional encoding
+        flat_attended = self.spatial_transformer(flat_tokens)              # (batch*30, 51, embed)
+        # Take CLS output (position 0) as the day's summary
+        flat_cls_out = flat_attended[:, 0, :]                              # (batch*30, embed)
+        vp_temporal_input = flat_cls_out.view(batch_size, self.n_days, self.vp_embed_dim)
 
-        # Stage 2: temporal attention across VP days
+        # Stage 2: temporal attention across VP days with CLS pooling
+        cls_vp_temp = self.vp_temporal_cls.expand(batch_size, -1, -1)
+        vp_temporal_input = torch.cat([cls_vp_temp, vp_temporal_input], dim=1)  # (batch, 31, embed)
         vp_temporal_input = vp_temporal_input + self.vp_temporal_pos
         vp_temporal_out = self.vp_temporal_transformer(vp_temporal_input)
-        vp_pooled = vp_temporal_out.mean(dim=1)                    # (batch, vp_embed_dim)
+        vp_pooled = vp_temporal_out[:, 0, :]                               # CLS token (batch, embed)
 
         # ─────────────── CANDLE BRANCH ───────────────
-        candles = self._aggregate_daily_candles(x)                 # (batch, 30, 7)
-        candle_tokens = self.candle_embed(candles) + self.candle_pos  # (batch, 30, candle_embed_dim)
-        candle_attended = self.candle_transformer(candle_tokens)    # (batch, 30, candle_embed_dim)
-        candle_pooled = candle_attended.mean(dim=1)                 # (batch, candle_embed_dim)
+        candles = self._aggregate_daily_candles(x)                         # (batch, 30, 7)
+        candle_tokens = self.candle_embed(candles)                         # (batch, 30, candle_embed)
+        # Prepend CLS token
+        cls_candle = self.candle_cls.expand(batch_size, -1, -1)
+        candle_tokens = torch.cat([cls_candle, candle_tokens], dim=1)      # (batch, 31, candle_embed)
+        candle_tokens = candle_tokens + self.candle_pos
+        candle_attended = self.candle_transformer(candle_tokens)
+        candle_pooled = candle_attended[:, 0, :]                           # CLS token (batch, candle_embed)
 
         # ─────────────── MERGE ───────────────
         combined = torch.cat([vp_pooled, candle_pooled, other], dim=1)
