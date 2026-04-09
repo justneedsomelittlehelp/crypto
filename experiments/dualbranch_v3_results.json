@@ -1,0 +1,36 @@
+{
+  "source": "Colab batch=512, dualbranch v3: pipeline overhaul (scaling + remove VP structure features)",
+  "version": "v3",
+  "changes_from_v2": [
+    "Removed 8 VP structure features (let spatial attention learn shape from raw bins)",
+    "Added walk-forward-safe z-score for volume_ratio, log_return, bar_range, bar_body",
+    "Soft tanh squashing for outliers (preserves magnitude, bounds gradients)",
+    "OHLC ratios centered at 0 (subtract 1)"
+  ],
+  "accuracy": 0.5967,
+  "folds_below_50": 2,
+  "fold_accs": [
+    0.5595, 0.5660, 0.4710, 0.5937, 0.6542,
+    0.4521, 0.7712, 0.6222, 0.5975, 0.7272
+  ],
+  "bull_stats": {
+    "precision": 0.391,
+    "npv": 0.657
+  },
+  "bear_stats": {
+    "precision": 0.799,
+    "npv": 0.297
+  },
+  "ev": {
+    "bull_long": 1.103,
+    "bear_long": 0.892,
+    "bear_short": 0.122
+  },
+  "comparison_vs_v1_v2": {
+    "bull_long_ev": {"v1": 0.628, "v2": 0.935, "v3": 1.103},
+    "bear_long_ev": {"v1": 1.005, "v2": 0.993, "v3": 0.892},
+    "bear_short_ev": {"v1": 0.763, "v2": 0.651, "v3": 0.122},
+    "accuracy": {"v1": 0.605, "v2": 0.578, "v3": 0.597}
+  },
+  "verdict": "Mixed. Bull long EV improved significantly (+0.47% vs v1) — spatial attention IS learning shape from raw bins. But bear short EV collapsed (-0.64% vs v1) — handcrafted VP features may have been doing real work for the bear side. Next: add VP structure features back, keep scaling fixes."
+}

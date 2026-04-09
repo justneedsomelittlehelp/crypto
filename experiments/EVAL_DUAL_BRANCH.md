@@ -190,7 +190,7 @@ Log: `logs/dualbranch_v2_volume.log`
 
 ---
 
-## Eval 3 — Pipeline overhaul: scaling + remove VP structure (pending)
+## Eval 3 — Pipeline overhaul: scaling + remove VP structure (2026-04-09)
 
 **Changes:**
 1. **Removed 8 VP structure features** — let spatial Transformer learn shape from raw bins
@@ -198,9 +198,57 @@ Log: `logs/dualbranch_v2_volume.log`
 3. **Soft tanh squashing** to bound outliers without losing magnitude info (black-swan handling)
 4. **OHLC ratios centered at 0** (subtract 1)
 
-Total features dropped from 68 → 60. Model param count slightly smaller from narrower FC concat.
+Total features dropped from 68 → 60.
 
-**Hypothesis:** Cleaner feature scales let the model learn from gradients across all features instead of being dominated by `volume_ratio`'s 50x range. Removing handcrafted VP features tests whether spatial attention can learn shape on its own.
+### Results
+
+| Metric | v1 | v2 | **v3** |
+|--------|----|----|----|
+| Accuracy | 60.5% | 57.8% | 59.7% |
+| Folds <50% | 1/10 | 2/10 | 2/10 |
+| Bull precision | 34.5% | 37.5% | **39.1%** |
+| Bear precision | 81.0% | 80.9% | 79.9% |
+| Bull long EV | +0.63% | +0.93% | **+1.10%** |
+| Bear long EV | +1.01% | +0.99% | +0.89% |
+| Bear short EV | +0.76% | +0.65% | **+0.12%** |
+
+### Fold-by-fold
+
+| Fold | v1 | v2 | v3 |
+|------|----|----|----|
+| 1 | 49.1% | 53.0% | **56.0%** |
+| 2 | 56.3% | 52.1% | 56.6% |
+| 3 | 56.6% | 57.9% | **47.1%** |
+| 4 | 63.6% | 57.9% | 59.4% |
+| 5 | 68.7% | 64.6% | 65.4% |
+| 6 | 50.6% | 39.7% | 45.2% |
+| 7 | 65.4% | 79.0% | 77.1% |
+| 8 | 70.4% | 49.3% | 62.2% |
+| 9 | 59.6% | 59.0% | 60.0% |
+| 10 | 66.9% | 75.8% | 72.7% |
+
+### Verdict: Mixed
+
+**Wins:**
+- Bull long EV jumped +0.47% over v1 — **spatial attention IS learning shape from raw bins**
+- Bull precision improved (39.1%, highest yet)
+- Folds 1, 2, 8 recovered nicely
+
+**Losses:**
+- Bear short EV collapsed from +0.76% → +0.12%
+- Bear NPV dropped from 35.8% → 29.7%
+- Fold 3 dropped to 47% (worst single fold)
+
+The pipeline changes shift performance from bear-side to bull-side. Removing the 8 VP structure features helped the spatial branch find ceiling/floor from raw bins, but those handcrafted features may have been doing real work specifically for bear-side predictions.
+
+Log: `logs/dualbranch_v3_overhaul.log`
+Results: `experiments/dualbranch_v3_results.json`
+
+---
+
+## Next: Eval 4 — Add VP structure features back, keep scaling fixes
+
+**Hypothesis:** The scaling fixes (z-score, tanh, OHLC center) are sound and shouldn't be reverted. Only the VP structure removal hurt the bear side. Restoring those 8 features while keeping the scaling should give the best of both — improved bull AND restored bear performance.
 
 Pending Colab run.
 
