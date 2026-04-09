@@ -100,10 +100,54 @@ Added 3 new features in `compute_derived_features`:
 
 These are scale-invariant (ratios) and let the model reconstruct daily OHLC from hourly bars without needing absolute prices.
 
-## Evals
+## Eval 1 — DualBranch v1 (2026-04-09)
 
-Pending — script ready, will run on Colab.
+**Setup:** Colab A100, batch=512, FGI adaptive 7.5/3, 27,057 params.
 
-Results: `experiments/dualbranch_compare_results.json` (TBD)
+### Overall
+
+| Metric | DualBranch | Temporal (prev) | Diff |
+|--------|-----------|----------------|------|
+| Accuracy | 60.5% | 61.9% | -1.4% |
+| Folds <50% | 1/10 | 0/10 | +1 |
+| Bull long EV | +0.63% | +1.04% | -0.41% |
+| Bear long EV | +1.01% | +1.00% | +0.01% |
+| Bear short EV | +0.76% | +0.82% | -0.06% |
+
+**Verdict:** Slightly worse than temporal-only model. The candle branch did not provide net improvement in this configuration.
+
+### Fold-by-fold
+
+| Fold | Period | Spatial | Temporal | DualBranch | vs Temporal |
+|------|--------|---------|----------|-----------|-------------|
+| 1 | 2020 H2 | 53.8% | 62.2% | **49.1%** | **-13.1** |
+| 2 | 2021 H1 | 59.0% | 51.6% | 56.3% | +4.7 |
+| 3 | 2021 H2 | 49.7% | 62.0% | 56.6% | -5.4 |
+| 4 | 2022 H1 | 58.5% | 59.1% | **63.6%** | +4.5 |
+| 5 | 2022 H2 | 71.6% | 67.4% | 68.7% | +1.3 |
+| 6 | 2023 H1 | 46.5% | 60.1% | 50.6% | -9.5 |
+| 7 | 2023 H2 | 76.9% | 75.5% | 65.4% | -10.1 |
+| 8 | 2024 H1 | 40.9% | 59.9% | **70.4%** | +10.5 |
+| 9 | 2024 H2 | 58.7% | 58.9% | 59.6% | +0.7 |
+| 10 | 2025 H1 | 46.4% | 67.2% | 66.9% | -0.3 |
+
+### Hypothesis: candle branch is treating all candles equally
+
+Pattern observed: dual-branch helps some folds (4, 8) and hurts others (1, 6, 7). User's trading rule explains this:
+
+> "I only trust hammers/inverted hammers when they have high volume and clear shape. Otherwise I ignore the candle entirely."
+
+The current candle branch sees ALL 30 daily candles equally, with no notion of "this candle is meaningful vs noise." Most days have neutral candles → these contribute noise that drowns out the few high-confidence hammers. The candle attention learns from a lot of irrelevant signal.
+
+**Critical missing input: volume.** The candle branch reconstructs daily candles from OHLC ratios but **never sees volume**. The user's pattern is `(shape) × (volume confirmation)` — half the equation is missing.
+
+### Next: DualBranch v2
+
+Add `day_volume_ratio` (total day volume / 30d daily average) as 8th feature per daily candle. Lets the model learn "high-volume hammer = strong signal" vs "low-volume hammer = noise."
+
+Param cost: +16 (just one more dim in the candle embed projection).
+
+Results: `experiments/dualbranch_compare_results.json`
 Script: `src/models/eval_dualbranch.py`
 Architecture: `src/models/architecture.py` → `DualBranchTransformerClassifier`
+Log: `logs/dualbranch_colab.log`

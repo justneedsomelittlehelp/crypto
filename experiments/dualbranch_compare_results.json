@@ -1,0 +1,33 @@
+{
+  "source": "Colab batch=512, dualbranch eval (DualBranch only — temporal run was killed)",
+  "dualbranch": {
+    "name": "DualBranch (VP + Candle)",
+    "params": 27057,
+    "accuracy": 0.6051,
+    "folds_below_50": 1,
+    "fold_accs": [
+      0.4911, 0.5627, 0.5663, 0.6360, 0.6874,
+      0.5057, 0.6543, 0.7036, 0.5963, 0.6686
+    ],
+    "bull_stats": {
+      "precision": 0.345,
+      "npv": 0.638
+    },
+    "bear_stats": {
+      "precision": 0.810,
+      "npv": 0.358
+    },
+    "ev": {
+      "bull_long": 0.628,
+      "bear_long": 1.005,
+      "bear_short": 0.763
+    }
+  },
+  "comparison_notes": {
+    "vs_temporal_colab": {
+      "overall_acc_diff": -0.014,
+      "bull_long_ev_diff": -0.41,
+      "verdict": "DualBranch slightly worse overall. Candle branch helped folds 4 and 8 but hurt folds 1, 6, 7. Hypothesis: candle attention treats all candles equally, drowning useful hammers in noise from neutral candles."
+    }
+  }
+}
