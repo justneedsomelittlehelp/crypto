@@ -99,6 +99,8 @@ def train_model(
             logits = model(x)
             loss = criterion(logits, y)
             loss.backward()
+            # Gradient clipping to prevent NaN explosions on CUDA / Transformer instability
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             train_loss_sum += loss.item() * len(y)
@@ -172,10 +174,14 @@ def train_model(
         json.dump(config, f, indent=2)
 
     print(f"\nBest val loss: {best_val_loss:.4f}")
-    print(f"Checkpoint saved to: {run_dir / 'model.pt'}")
 
     # Load best weights back into model (on CPU for compatibility)
     model = model.cpu()
-    model.load_state_dict(torch.load(run_dir / "model.pt", weights_only=True))
+    checkpoint_path = run_dir / "model.pt"
+    if checkpoint_path.exists():
+        print(f"Checkpoint saved to: {checkpoint_path}")
+        model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
+    else:
+        print(f"WARNING: No checkpoint saved (training likely diverged with NaN losses)")
 
     return {"run_id": run_id, "run_dir": run_dir, "history": history, "best_val_loss": best_val_loss}
