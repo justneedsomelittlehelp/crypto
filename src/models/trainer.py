@@ -1,4 +1,5 @@
 import json
+import math
 import time
 from pathlib import Path
 
@@ -12,6 +13,28 @@ from src.config import (
     EARLY_STOP_PATIENCE,
     RUNS_DIR,
 )
+
+
+def _make_lr_schedule(optimizer, schedule, base_lr, total_epochs, warmup_epochs):
+    """Build LR scheduler.
+
+    schedule:
+      - "constant": no scheduling (current default)
+      - "cosine": cosine decay with optional linear warmup
+      - "warmup_cosine": linear warmup then cosine decay
+    """
+    if schedule == "constant":
+        return None
+
+    def lr_lambda(epoch):
+        if epoch < warmup_epochs:
+            # Linear warmup from 0 → 1
+            return (epoch + 1) / max(1, warmup_epochs)
+        # Cosine decay from 1 → 0 over remaining epochs
+        progress = (epoch - warmup_epochs) / max(1, total_epochs - warmup_epochs)
+        return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
 def get_device() -> torch.device:
@@ -30,8 +53,17 @@ def train_model(
     epochs: int = EPOCHS,
     patience: int = EARLY_STOP_PATIENCE,
     run_id: str | None = None,
+    lr_schedule: str = "constant",
+    warmup_epochs: int = 5,
+    weight_decay: float = 0.0,
+    seed: int | None = None,
 ) -> dict:
     device = get_device()
+
+    if seed is not None:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     if run_id is None:
         run_id = f"run_{int(time.time())}"
@@ -46,7 +78,8 @@ def train_model(
     pos_weight = torch.tensor([n_neg / n_pos], device=device) if n_pos > 0 else torch.tensor([1.0], device=device)
 
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = _make_lr_schedule(optimizer, lr_schedule, lr, epochs, warmup_epochs)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     best_val_loss = float("inf")
@@ -100,11 +133,17 @@ def train_model(
         history["train_acc"].append(train_acc)
         history["val_acc"].append(val_acc)
 
+        current_lr = optimizer.param_groups[0]["lr"]
         print(
             f"Epoch {epoch:3d}/{epochs} | "
+            f"LR: {current_lr:.2e} | "
             f"Train Loss: {train_loss:.4f}  Acc: {train_acc:.4f} | "
             f"Val Loss: {val_loss:.4f}  Acc: {val_acc:.4f}"
         )
+
+        # Step LR scheduler
+        if scheduler is not None:
+            scheduler.step()
 
         # --- Early stopping + checkpointing ---
         if val_loss < best_val_loss:
