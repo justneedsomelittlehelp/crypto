@@ -40,8 +40,8 @@ from src.features.pipelines.v1_raw import (
 from src.features.pipelines.v2_scaled import (
     build_feature_matrix_v2, FEATURE_COLS_V2, DERIVED_FEATURE_COLS_V2,
 )
-from src.models.architecture import TemporalTransformerClassifier
-from src.models.architectures.v6_temporal_enriched import TemporalEnrichedV6
+from src.models.architectures.v7_simple_2plus1 import SimpleTemporalV7
+from src.models.architectures.v8_enriched_2plus1 import EnrichedTemporalV8
 
 # ═══════════════════════════════════════════════════════════════════
 # Config
@@ -90,7 +90,7 @@ def precompute_labels(close: np.ndarray, dates: np.ndarray) -> np.ndarray:
     # Vectorized rolling std
     lr_series = pd.Series(log_returns)
     rolling_std = lr_series.rolling(window=vol_window, min_periods=vol_window).std().values
-    rolling_vol[vol_window:len(log_returns)] = rolling_std[vol_window - 1:]
+    rolling_vol[vol_window + 1:] = rolling_std[vol_window:]
 
     valid_vol = rolling_vol[~np.isnan(rolling_vol)]
     if len(valid_vol) == 0:
@@ -310,22 +310,13 @@ def evaluate_fold(model, test_loader, device, use_amp=False):
 # Model builders
 # ═══════════════════════════════════════════════════════════════════
 def build_model_a():
-    """Simple 2+1: TemporalTransformerClassifier with 2 spatial + 1 temporal."""
-    return TemporalTransformerClassifier(
-        embed_dim=32,
-        n_heads=4,
-        n_spatial_layers=2,
-        n_temporal_layers=1,
-        fc_size=64,
-        dropout=0.15,
-        n_days=30,
-        bars_per_day=BARS_PER_DAY,
-    )
+    """Simple 2+1: SimpleTemporalV7 (frozen)."""
+    return SimpleTemporalV7()
 
 
 def build_model_b():
-    """Enriched 2+1: TemporalEnrichedV6 with 2 spatial + 1 temporal."""
-    return TemporalEnrichedV6(
+    """Enriched 2+1: EnrichedTemporalV8 (frozen)."""
+    return EnrichedTemporalV8(
         ohlc_open_idx=feature_index_v1("ohlc_open_ratio"),
         ohlc_high_idx=feature_index_v1("ohlc_high_ratio"),
         ohlc_low_idx=feature_index_v1("ohlc_low_ratio"),
