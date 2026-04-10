@@ -66,22 +66,26 @@ FOLD_BOUNDARIES = [
 # ═══════════════════════════════════════════════════════════════════
 # Precompute labels (once, on full df)
 # ═══════════════════════════════════════════════════════════════════
-def precompute_labels(close: np.ndarray, dates: np.ndarray) -> np.ndarray:
-    """Vectorized first-hit labels with FGI regime adaptation."""
-    n = len(close)
-    labels = np.full(n, np.nan, dtype=np.float32)
-
-    # Load FGI once
+def build_regime_array(dates: np.ndarray) -> np.ndarray:
+    """Build FGI-based regime array: 1.0=bull, 0.0=bear, NaN=unknown."""
+    n = len(dates)
     fgi_df = pd.read_csv(LABEL_FGI_PATH, parse_dates=["date"])
     fgi_lookup = dict(zip(fgi_df["date"].dt.date, fgi_df["fgi_value"].astype(float)))
-
-    # Build regime array
     is_bull = np.full(n, np.nan)
     for i in range(n):
         dt = pd.Timestamp(dates[i]).date()
         fgi = fgi_lookup.get(dt, np.nan)
         if not np.isnan(fgi):
             is_bull[i] = float(fgi >= 50)
+    return is_bull
+
+
+def precompute_labels(close: np.ndarray, dates: np.ndarray) -> np.ndarray:
+    """Vectorized first-hit labels with FGI regime adaptation."""
+    n = len(close)
+    labels = np.full(n, np.nan, dtype=np.float32)
+
+    is_bull = build_regime_array(dates)
 
     # Rolling volatility
     vol_window = 30
@@ -151,9 +155,10 @@ class FastDataset(Dataset):
     """TimeSeriesDataset with precomputed labels — no per-init computation."""
 
     def __init__(self, features: torch.Tensor, labels: torch.Tensor,
-                 lookback: int = LOOKBACK_BARS_MODEL):
+                 regime: np.ndarray = None, lookback: int = LOOKBACK_BARS_MODEL):
         self.features = features
         self.labels = labels
+        self.regime = regime
         self.lookback = lookback
 
         # Vectorized valid index construction
@@ -165,6 +170,16 @@ class FastDataset(Dataset):
             label_indices = candidates + lookback - 1
             valid_mask = (label_indices < len(labels)) & ~torch.isnan(labels[label_indices]).numpy()
             self.valid_indices = candidates[valid_mask]
+
+    def get_regime(self, idx):
+        """Get regime for sample idx (used after prediction, not in training)."""
+        if self.regime is None:
+            return np.nan
+        real_idx = self.valid_indices[idx]
+        label_idx = real_idx + self.lookback - 1
+        if label_idx < len(self.regime):
+            return self.regime[label_idx]
+        return np.nan
 
     def __len__(self):
         return len(self.valid_indices)
@@ -344,7 +359,7 @@ def count_params(model):
 # Walk-forward runner
 # ═══════════════════════════════════════════════════════════════════
 def run_walk_forward(model_name, model_builder, features_tensor, labels_tensor,
-                     dates, device, use_amp):
+                     dates, regime_array, device, use_amp):
     """Run full walk-forward for one model config."""
     print(f"\n{'=' * 70}")
     print(f"  {model_name}")
@@ -355,7 +370,7 @@ def run_walk_forward(model_name, model_builder, features_tensor, labels_tensor,
     print(f"  Params: {n_params:,}")
     del sample_model
 
-    all_preds, all_labels = [], []
+    all_preds, all_labels, all_regimes = [], [], []
     fold_results = []
 
     for i in range(len(FOLD_BOUNDARIES) - 2):
@@ -381,14 +396,17 @@ def run_walk_forward(model_name, model_builder, features_tensor, labels_tensor,
         train_ds = FastDataset(
             features_tensor[train_idx[0]:train_idx[-1] + 1],
             labels_tensor[train_idx[0]:train_idx[-1] + 1],
+            regime_array[train_idx[0]:train_idx[-1] + 1],
         )
         val_ds = FastDataset(
             features_tensor[val_idx[0]:val_idx[-1] + 1],
             labels_tensor[val_idx[0]:val_idx[-1] + 1],
+            regime_array[val_idx[0]:val_idx[-1] + 1],
         )
         test_ds = FastDataset(
             features_tensor[test_idx[0]:test_idx[-1] + 1],
             labels_tensor[test_idx[0]:test_idx[-1] + 1],
+            regime_array[test_idx[0]:test_idx[-1] + 1],
         )
 
         if len(train_ds) < 100 or len(val_ds) < 50 or len(test_ds) < 50:
@@ -415,10 +433,10 @@ def run_walk_forward(model_name, model_builder, features_tensor, labels_tensor,
         model = train_fold(model, train_loader, val_loader, device, use_amp=use_amp)
         preds, labels = evaluate_fold(model, test_loader, device, use_amp=use_amp)
 
+        # Collect regime for each test sample
+        fold_regimes = np.array([test_ds.get_regime(j) for j in range(len(test_ds))])
+
         fold_acc = (preds == labels).mean()
-        fold_prec = preds[preds == 1].shape[0] and (
-            ((preds == 1) & (labels == 1)).sum() / max((preds == 1).sum(), 1)
-        )
         fold_time = time.time() - fold_start
 
         fold_results.append({
@@ -430,6 +448,7 @@ def run_walk_forward(model_name, model_builder, features_tensor, labels_tensor,
         })
         all_preds.extend(preds.tolist())
         all_labels.extend(labels.tolist())
+        all_regimes.extend(fold_regimes.tolist())
 
         print(f"    Acc: {fold_acc:.4f} ({len(preds)} samples, {fold_time:.0f}s)")
 
@@ -440,27 +459,90 @@ def run_walk_forward(model_name, model_builder, features_tensor, labels_tensor,
     # Overall stats
     preds = np.array(all_preds)
     labels = np.array(all_labels)
-    tp = ((preds == 1) & (labels == 1)).sum()
-    fp = ((preds == 1) & (labels == 0)).sum()
-    tn = ((preds == 0) & (labels == 0)).sum()
-    fn = ((preds == 0) & (labels == 1)).sum()
-    acc = (tp + tn) / len(preds)
-    prec = tp / max(tp + fp, 1)
-    recall = tp / max(tp + fn, 1)
+    regimes = np.array(all_regimes)
+
+    def confusion(p, l):
+        tp = int(((p == 1) & (l == 1)).sum())
+        fp = int(((p == 1) & (l == 0)).sum())
+        tn = int(((p == 0) & (l == 0)).sum())
+        fn = int(((p == 0) & (l == 1)).sum())
+        prec = tp / max(tp + fp, 1)
+        npv = tn / max(tn + fn, 1)
+        acc = (tp + tn) / max(len(p), 1)
+        pred1_rate = float((p == 1).mean())
+        return {"tp": tp, "fp": fp, "tn": tn, "fn": fn,
+                "precision": round(prec, 4), "npv": round(npv, 4),
+                "accuracy": round(acc, 4), "pred1_rate": round(pred1_rate, 4),
+                "n": len(p)}
+
+    all_stats = confusion(preds, labels)
+    acc = all_stats["accuracy"]
+    prec = all_stats["precision"]
+    recall = all_stats["tp"] / max(all_stats["tp"] + all_stats["fn"], 1)
     f1 = 2 * prec * recall / max(prec + recall, 1e-8)
+
+    # Per-regime stats
+    bull = regimes == 1.0
+    bear = regimes == 0.0
+    bull_stats = confusion(preds[bull], labels[bull]) if bull.sum() > 0 else None
+    bear_stats = confusion(preds[bear], labels[bear]) if bear.sum() > 0 else None
+
+    # EV calculation
+    # Bull regime: TP=7.5% SL=3% (no flip). Long wins 7.5%, loses 3%. Short wins 3%, loses 7.5%.
+    # Bear regime: TP=3% SL=7.5% (flipped). Long wins 3%, loses 7.5%. Short wins 7.5%, loses 3%.
+    regime_ev = {}
+    if bull_stats:
+        ev_bull_long = bull_stats["precision"] * 7.5 - (1 - bull_stats["precision"]) * 3.0
+        ev_bull_short = bull_stats["npv"] * 3.0 - (1 - bull_stats["npv"]) * 7.5
+        regime_ev["bull_long"] = round(ev_bull_long, 2)
+        regime_ev["bull_short"] = round(ev_bull_short, 2)
+    if bear_stats:
+        ev_bear_long = bear_stats["precision"] * 3.0 - (1 - bear_stats["precision"]) * 7.5
+        ev_bear_short = bear_stats["npv"] * 7.5 - (1 - bear_stats["npv"]) * 3.0
+        regime_ev["bear_long"] = round(ev_bear_long, 2)
+        regime_ev["bear_short"] = round(ev_bear_short, 2)
 
     overall = {
         "accuracy": round(float(acc), 4),
         "precision": round(float(prec), 4),
         "recall": round(float(recall), 4),
         "f1": round(float(f1), 4),
-        "tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn),
+        "tp": all_stats["tp"], "fp": all_stats["fp"],
+        "tn": all_stats["tn"], "fn": all_stats["fn"],
         "n_samples": len(preds),
         "n_params": count_params(model_builder()),
+        "bull_stats": bull_stats,
+        "bear_stats": bear_stats,
+        "regime_ev": regime_ev,
     }
 
     print(f"\n  OVERALL: Acc={acc:.4f}  Prec={prec:.4f}  F1={f1:.4f}")
-    print(f"  TP={tp} FP={fp} TN={tn} FN={fn}")
+    print(f"  TP={all_stats['tp']} FP={all_stats['fp']} TN={all_stats['tn']} FN={all_stats['fn']}")
+
+    if bull_stats:
+        print(f"\n  BULL ({bull_stats['n']} bars):")
+        print(f"    Acc={bull_stats['accuracy']:.4f}  Prec={bull_stats['precision']:.4f}  NPV={bull_stats['npv']:.4f}  Pred=1 rate={bull_stats['pred1_rate']:.4f}")
+        print(f"    Long EV:  {regime_ev['bull_long']:+.2f}%   Short EV: {regime_ev['bull_short']:+.2f}%")
+
+    if bear_stats:
+        print(f"\n  BEAR ({bear_stats['n']} bars):")
+        print(f"    Acc={bear_stats['accuracy']:.4f}  Prec={bear_stats['precision']:.4f}  NPV={bear_stats['npv']:.4f}  Pred=1 rate={bear_stats['pred1_rate']:.4f}")
+        print(f"    Long EV:  {regime_ev['bear_long']:+.2f}%   Short EV: {regime_ev['bear_short']:+.2f}%")
+
+    # Strategy EVs (weighted by regime fraction)
+    if bull_stats and bear_stats:
+        bull_frac = bull.sum() / max(bull.sum() + bear.sum(), 1)
+        bear_frac = 1 - bull_frac
+        strategies = {
+            "S1: Long only (both regimes)": bull_frac * regime_ev["bull_long"] + bear_frac * regime_ev["bear_long"],
+            "S2: Long bull, skip bear": bull_frac * regime_ev["bull_long"],
+            "S3: Both sides both regimes": bull_frac * (regime_ev["bull_long"] + regime_ev["bull_short"]) / 2 + bear_frac * (regime_ev["bear_long"] + regime_ev["bear_short"]) / 2,
+            "S4: Long bull + both bear": bull_frac * regime_ev["bull_long"] + bear_frac * (regime_ev["bear_long"] + regime_ev["bear_short"]) / 2,
+        }
+        print(f"\n  STRATEGY EVs (bull={bull_frac:.1%}, bear={bear_frac:.1%}):")
+        for name, ev in strategies.items():
+            print(f"    {name}: {ev:+.2f}%")
+        overall["strategies"] = {k: round(v, 2) for k, v in strategies.items()}
 
     return {"model": model_name, "overall": overall, "folds": fold_results}
 
@@ -504,6 +586,11 @@ def main():
     print(f"  v1: {n_valid_v1} valid labels")
     print(f"  Labels computed in {time.time() - t0:.1f}s")
 
+    # ─── Precompute regime arrays ───
+    print("Building regime arrays...")
+    regime_v2 = build_regime_array(df_v2["date"].values)
+    regime_v1 = build_regime_array(df_v1["date"].values)
+
     # ─── Convert to tensors ───
     features_v2 = torch.from_numpy(df_v2[FEATURE_COLS_V2].values.astype(np.float32))
     labels_v2_t = torch.from_numpy(labels_v2)
@@ -516,8 +603,8 @@ def main():
     # ─── Run Model A: Simple 2+1 ───
     t0 = time.time()
     results_a = run_walk_forward(
-        "Model A: Simple 2+1 (TemporalTransformer, n_spatial=2, n_temporal=1)",
-        build_model_a, features_v2, labels_v2_t, dates_v2, device, use_amp,
+        "Model A: Simple 2+1 (v7, n_spatial=2, n_temporal=1)",
+        build_model_a, features_v2, labels_v2_t, dates_v2, regime_v2, device, use_amp,
     )
     results_a["total_time_min"] = round((time.time() - t0) / 60, 1)
     print(f"\n  Total time: {results_a['total_time_min']} min")
@@ -525,8 +612,8 @@ def main():
     # ─── Run Model B: Enriched 2+1 ───
     t0 = time.time()
     results_b = run_walk_forward(
-        "Model B: Enriched 2+1 (TemporalEnrichedV6, n_spatial=2, n_temporal=1)",
-        build_model_b, features_v1, labels_v1_t, dates_v1, device, use_amp,
+        "Model B: Enriched 2+1 (v8, n_spatial=2, n_temporal=1)",
+        build_model_b, features_v1, labels_v1_t, dates_v1, regime_v1, device, use_amp,
     )
     results_b["total_time_min"] = round((time.time() - t0) / 60, 1)
     print(f"\n  Total time: {results_b['total_time_min']} min")
