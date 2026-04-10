@@ -1,0 +1,17 @@
+{
+  "source": "Colab batch=512, v6 enriched + 24h fixed-horizon labels",
+  "v6_enriched_24h": {
+    "accuracy": 0.5037,
+    "precision": 0.5226,
+    "npv": 0.4902,
+    "base_rate": 0.515,
+    "folds_below_50": 4,
+    "confidence_thresholds": {
+      "0.55": {"n_up": 256, "up_acc": 0.621, "n_down": 5174, "down_acc": 0.480},
+      "0.60": {"n_up": 0, "up_acc": 0, "n_down": 119, "down_acc": 0.370},
+      "0.65": {"n_up": 0, "up_acc": 0, "n_down": 1, "down_acc": 0},
+      "0.70": {"n_up": 0, "up_acc": 0, "n_down": 1, "down_acc": 0}
+    },
+    "verdict": "50.4% = random. VP predicts barriers (support/resistance outcomes), NOT general 24h price direction. Stick with first-hit labels."
+  }
+}

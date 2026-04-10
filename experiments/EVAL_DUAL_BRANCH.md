@@ -265,13 +265,122 @@ Results: `experiments/dualbranch_v3_results.json`
 
 ---
 
-## Next: Eval 4 — Add VP structure features back, keep scaling fixes
+## Diagnostic Sweep — Why did LR sweep tank? (2026-04-09)
 
-**Hypothesis:** The scaling fixes (z-score, tanh, OHLC center) are sound and shouldn't be reverted. Only the VP structure removal hurt the bear side. Restoring those 8 features while keeping the scaling should give the best of both — improved bull AND restored bear performance.
+Tested 5 configs to isolate why the LR sweep produced uniformly bad results (~52% vs 60% baseline).
 
-Pending Colab run.
+| Config | Acc | <50% | Diagnosis |
+|--------|-----|------|-----------|
+| 1. Baseline (clip=1.0) | 52.8% | 5/10 | Matches LR sweep |
+| 2. Loosened clip (5.0) | 53.6% | 4/10 | Slight improvement |
+| 3. No clip | 53.6% | 4/10 | Same as #2 |
+| 4. OLD pipeline | **48.1%** | **7/10** | Worst — don't revert pipeline |
+| **5. Temporal-only + new pipeline** | **56.0%** | **4/10** | **Best — candle branch hurts** |
 
-Results: `experiments/dualbranch_compare_results.json`
-Script: `src/models/eval_dualbranch.py`
-Architecture: `src/models/architecture.py` → `DualBranchTransformerClassifier`
-Log: `logs/dualbranch_colab.log`
+**Root cause:** The candle branch was hurting more than helping. Temporal-only beat DualBranch by 3% on the same pipeline. Gradient clipping was a minor factor.
+
+Results: `experiments/diagnose_results.json`
+
+---
+
+## v6 Enriched Temporal — Single-path enrichment (2026-04-10)
+
+**Architecture change:** Instead of a separate candle branch (DualBranch), enrich each temporal day token with candle + VP structure features alongside the VP spatial embedding. One temporal attention path sees everything.
+
+### v6 vs v2 Head-to-head (same TP/SL, same pipeline, same seed)
+
+| Metric | v6 enriched | v2 baseline | Diff |
+|--------|-------------|-------------|------|
+| **Accuracy** | **58.4%** | 56.7% | **+1.7%** |
+| Precision (UP) | **68.3%** | 60.3% | **+8.0%** |
+| Folds <50% | **1/10** | 3/10 | **-2** |
+| **Bull long EV** | **+1.57%** | +0.41% | **+1.16%** |
+| Bear long EV | +1.02% | +1.04% | -0.02% |
+| Bear short EV | -0.04% | +0.42% | -0.46% |
+
+### Fold-by-fold
+
+| Fold | v6 | v2 | Diff |
+|------|-----|-----|------|
+| 1 | **27.9%** | 47.5% | -19.6 |
+| 2 | **57.2%** | 38.8% | **+18.4** |
+| 3 | 54.4% | 56.3% | -1.9 |
+| 4 | 53.1% | 52.7% | +0.4 |
+| 5 | 60.6% | 69.8% | -9.2 |
+| 6 | 65.7% | 60.1% | +5.6 |
+| 7 | 73.0% | 68.5% | +4.5 |
+| 8 | **68.7%** | **44.3%** | **+24.4** |
+| 9 | 55.9% | 62.6% | -6.7 |
+| 10 | 72.7% | 72.8% | -0.1 |
+
+**Verdict:** v6 enrichment is a net positive (+1.7% accuracy, huge bull long EV improvement, fewer catastrophic folds). Fold 1 collapsed (data scarcity), but folds 2 and 8 recovered dramatically.
+
+Results: `experiments/v6_vs_v2_results.json`
+Script: `src/models/eval_v6_vs_v2.py`
+Architecture: `src/models/architectures/v6_temporal_enriched.py`
+
+---
+
+## 24h Fixed-Horizon Label Test (2026-04-10)
+
+**Hypothesis:** First-hit labels ask the model to predict a complex barrier race. Maybe a simpler label (24h close direction: up or down?) would be easier to learn and produce more frequent trades.
+
+### Results (v6 enriched + 24h horizon)
+
+| Metric | Value |
+|--------|-------|
+| Accuracy | **50.4%** |
+| Precision (UP) | 52.3% |
+| NPV (DOWN) | 49.0% |
+| Base rate (% UP) | 51.5% |
+| Folds <50% | 4/10 |
+
+**The model is essentially random on 24h direction prediction.** Confidence analysis showed nearly zero high-confidence predictions (0 samples above 60% threshold for UP, only 256 above 55%).
+
+### What this proves
+
+The same model gets **58-62% on first-hit labels but 50% on 24h labels**. This is a critical finding:
+
+1. **The model IS learning something real** — it's not random noise or label exploitation
+2. **What it learns is VP barrier prediction** — where price will stop/reverse at support/resistance levels
+3. **VP does NOT predict general direction** — "will price be higher in 24h?" depends on macro/news/sentiment that VP doesn't encode
+4. **First-hit labels are correct** for this feature set — they measure exactly what VP is good at predicting
+
+### Implication for strategy
+
+Don't pursue simpler labels or general direction prediction. The model's edge is specifically in **VP support/resistance barrier outcomes**. Profitability comes from:
+- Better accuracy on first-hit labels (2+1 spatial layers, more data)
+- Faster-resolving TP/SL (2.5/1 instead of 7.5/3)
+- Lower fees (maker-only limit orders)
+
+Results: `experiments/horizon_24h_results.json`
+Script: `src/models/eval_24h_horizon.py`
+
+---
+
+## Architecture & Pipeline Version Summary
+
+### Frozen architectures (`src/models/architectures/`)
+
+| Version | Type | Params | Best acc | Key feature |
+|---------|------|--------|----------|-------------|
+| v2_temporal | VP-only, mean pool | 23,041 | 61.9% | Our best validated baseline |
+| v5_dualbranch_cls | VP + Candle separate branches | 27,057 | 60.5% | CLS pooling, candle hurts |
+| v6_temporal_enriched | VP + enriched day tokens, CLS | 24,737 | 58.4% | Single-path, +1.7% over v2 same run |
+
+### Frozen pipelines (`src/features/pipelines/`)
+
+| Version | Features | Key difference |
+|---------|----------|----------------|
+| v1_raw | 68 (50 VP + 10 derived + 8 VP structure) | Original, no scaling |
+| v2_scaled | 60 (50 VP + 10 derived) | z-score + tanh, VP structure removed (HURT) |
+
+### Log index
+
+| Log | Script | What it tested |
+|-----|--------|---------------|
+| `dualbranch_colab.log` | eval_dualbranch | DualBranch v1 |
+| `dualbranch_v2_volume.log` | eval_dualbranch | DualBranch v2 (volume) |
+| `dualbranch_v3_overhaul.log` | eval_dualbranch | DualBranch v3 (scaling overhaul, candle bug) |
+| `lr_sweep_results.log` | sweep_lr | LR schedule sweep (all bad) |
+| `reproduce_v1.log` | eval_reproduce_v1 | Reproduced v2_temporal at 59.2% |
