@@ -1,15 +1,7 @@
-"""Reproduce the original Temporal Transformer run (61.9% accuracy baseline).
+"""Reproduce the original Temporal Transformer baseline (61.9% target).
 
-Uses:
-- TemporalTransformerClassifier (VP-only, no candle branch)
-- OLD pipeline (VP structure features restored, no z-score, no tanh)
-- FGI adaptive 7.5/3
-- Batch from config (use 512 on Colab, 64 on Mac)
-- No grad clipping (original setup)
-
-This is our "last known good" configuration. If this reproduces ~60% accuracy,
-we know the pipeline overhaul and/or candle branch are the culprits. If this
-also comes out ~55%, something else regressed.
+Uses frozen v2_temporal architecture + frozen v1_raw pipeline.
+This is the "last known good" configuration from the pre-overhaul era.
 
 Usage:
     python3 -m src.models.eval_reproduce_v1
@@ -24,60 +16,11 @@ import torch
 
 sys.stdout.reconfigure(line_buffering=True)
 
-# NOTE: Must import config + feature modules BEFORE build_feature_matrix is called
-# so that we can monkey-patch the pipeline to use OLD behavior.
-import src.config as cfg
-import src.features.pipeline as pipe_mod
-import src.features.dataset as ds_mod
-
+from src.config import BATCH_SIZE, LOOKBACK_BARS_MODEL, EXPERIMENTS_DIR, LABEL_FGI_PATH
+from src.features.pipelines.v1_raw import build_feature_matrix_v1, FEATURE_COLS_V1
 from src.features.dataset import TimeSeriesDataset, make_loader
-from src.models.architecture import TemporalTransformerClassifier
+from src.models.architectures.v2_temporal import TemporalTransformerV2
 from src.models.trainer import train_model
-
-
-# ── Restore the OLD pipeline: VP structure features + no scaling ──
-ORIGINAL_VP_STRUCTURE_COLS = [
-    "vp_ceiling_dist",
-    "vp_floor_dist",
-    "vp_num_peaks",
-    "vp_ceiling_strength",
-    "vp_floor_strength",
-    "vp_ceiling_consistency",
-    "vp_floor_consistency",
-    "vp_mid_range",
-]
-
-# Inject the VP structure cols back into config
-cfg.VP_STRUCTURE_COLS = ORIGINAL_VP_STRUCTURE_COLS
-cfg.FEATURE_COLS = cfg.VP_COL_NAMES + cfg.DERIVED_FEATURE_COLS + cfg.VP_STRUCTURE_COLS
-
-# Also update dataset module's cached import of FEATURE_COLS
-ds_mod.FEATURE_COLS = cfg.FEATURE_COLS
-
-# Monkey-patch compute_derived_features to skip z-score/tanh (old behavior)
-def old_compute_derived_features(df):
-    df = df.copy()
-    df["log_return"] = np.log(df["close"] / df["close"].shift(1))
-    df["bar_range"] = (df["high"] - df["low"]) / df["close"]
-    df["bar_body"] = (df["close"] - df["open"]) / df["open"]
-    rolling_mean = df[cfg.VOLUME_COL].rolling(
-        window=cfg.VOLUME_ROLL_WINDOW_BARS, min_periods=cfg.VOLUME_ROLL_WINDOW_BARS
-    ).mean()
-    df["volume_ratio"] = df[cfg.VOLUME_COL] / rolling_mean
-    bar_height = (df["high"] - df["low"]).clip(lower=1e-10)
-    df["upper_wick"] = (df["high"] - df[["open", "close"]].max(axis=1)) / bar_height
-    df["lower_wick"] = (df[["open", "close"]].min(axis=1) - df["low"]) / bar_height
-    df["body_dir"] = np.sign(df["close"] - df["open"])
-    df["ohlc_open_ratio"] = df["open"] / df["close"]
-    df["ohlc_high_ratio"] = df["high"] / df["close"]
-    df["ohlc_low_ratio"] = df["low"] / df["close"]
-    return df
-
-pipe_mod.compute_derived_features = old_compute_derived_features
-
-
-# Now build the feature matrix with the patched pipeline
-from src.features.pipeline import build_feature_matrix
 
 FOLD_BOUNDARIES = [
     "2020-01-01", "2020-07-01",
@@ -91,7 +34,7 @@ FOLD_BOUNDARIES = [
 TP = 0.075
 SL = 0.03
 
-FGI_DF = pd.read_csv(cfg.LABEL_FGI_PATH, parse_dates=["date"])
+FGI_DF = pd.read_csv(LABEL_FGI_PATH, parse_dates=["date"])
 FGI_LOOKUP = dict(zip(FGI_DF["date"].dt.date, FGI_DF["fgi_value"].astype(float)))
 
 
@@ -107,6 +50,9 @@ def get_regime_for_dataset(ds, df):
 
 
 def main():
+    import src.config as cfg
+    import src.features.dataset as ds_mod
+
     cfg.LABEL_TP_PCT = TP
     cfg.LABEL_SL_PCT = SL
     cfg.LABEL_REGIME_ADAPTIVE = True
@@ -116,9 +62,9 @@ def main():
     ds_mod.LABEL_REGIME_ADAPTIVE = True
     ds_mod.LABEL_REGIME_MODE = "fgi"
 
-    print("Loading data (OLD pipeline w/ VP structure features)...", flush=True)
-    df = build_feature_matrix()
-    print(f"Data: {len(df)} rows, {len(cfg.FEATURE_COLS)} features\n", flush=True)
+    print("Loading data (FROZEN v1_raw pipeline)...", flush=True)
+    df = build_feature_matrix_v1()
+    print(f"Data: {len(df)} rows, {len(FEATURE_COLS_V1)} features\n", flush=True)
 
     all_preds = []
     all_labels = []
@@ -138,27 +84,28 @@ def main():
         if len(train_df) < 1000 or len(val_df) < 100 or len(test_df) < 100:
             continue
 
-        train_ds = TimeSeriesDataset(train_df, lookback=cfg.LOOKBACK_BARS_MODEL)
-        val_ds = TimeSeriesDataset(val_df, lookback=cfg.LOOKBACK_BARS_MODEL)
-        test_ds = TimeSeriesDataset(test_df, lookback=cfg.LOOKBACK_BARS_MODEL)
+        # Pass FEATURE_COLS_V1 explicitly — don't rely on the global
+        train_ds = TimeSeriesDataset(train_df, lookback=LOOKBACK_BARS_MODEL, feature_cols=FEATURE_COLS_V1)
+        val_ds = TimeSeriesDataset(val_df, lookback=LOOKBACK_BARS_MODEL, feature_cols=FEATURE_COLS_V1)
+        test_ds = TimeSeriesDataset(test_df, lookback=LOOKBACK_BARS_MODEL, feature_cols=FEATURE_COLS_V1)
 
         if len(train_ds) < 100 or len(val_ds) < 50 or len(test_ds) < 50:
             continue
 
         regime = get_regime_for_dataset(test_ds, test_df)
 
-        train_loader = make_loader(train_ds, cfg.BATCH_SIZE, shuffle=True)
-        val_loader = make_loader(val_ds, cfg.BATCH_SIZE)
-        test_loader = make_loader(test_ds, cfg.BATCH_SIZE)
+        train_loader = make_loader(train_ds, BATCH_SIZE, shuffle=True)
+        val_loader = make_loader(val_ds, BATCH_SIZE)
+        test_loader = make_loader(test_ds, BATCH_SIZE)
 
-        model = TemporalTransformerClassifier()
+        # Frozen v2_temporal: 18 other features (10 derived + 8 VP structure)
+        model = TemporalTransformerV2(n_other_features=18)
 
-        # Original training setup: no LR schedule, no grad clipping, seed=42
         train_model(
             model, train_loader, val_loader,
             lr=5e-4,
             lr_schedule="constant",
-            grad_clip=0.0,  # original had no clipping
+            grad_clip=0.0,
             seed=42,
         )
 
@@ -204,10 +151,7 @@ def main():
     ev_bear_short = bear_npv * 7.5 - (1 - bear_npv) * 3.0
 
     result = {
-        "name": "Reproduce v1 (Temporal + OLD pipeline + VP structure)",
-        "model": "TemporalTransformerClassifier",
-        "pipeline": "OLD (no z-score, VP structure cols present)",
-        "feature_count": len(cfg.FEATURE_COLS),
+        "name": "Reproduce v1 (TemporalV2 + v1_raw pipeline)",
         "accuracy": float((preds == labels).mean()),
         "fold_accs": [float(a) for a in fold_accs],
         "fold_acc_std": float(np.std(fold_accs)),
@@ -224,19 +168,16 @@ def main():
     print(f"\n{'=' * 80}")
     print(f"  REPRODUCTION RESULT")
     print(f"{'=' * 80}")
-    print(f"  Accuracy: {result['accuracy']:.4f}")
+    print(f"  Accuracy: {result['accuracy']:.4f}  (target: ~61.9%)")
     print(f"  Folds <50%: {result['folds_below_50']}/10")
     print(f"  Bull precision: {result['bull_precision']:.4f}")
     print(f"  Bear precision: {result['bear_precision']:.4f}")
-    print(f"  Bear NPV: {result['bear_npv']:.4f}")
     print(f"  EVs: bull_long={result['ev_bull_long']:+.3f}%, "
           f"bear_long={result['ev_bear_long']:+.3f}%, "
           f"bear_short={result['ev_bear_short']:+.3f}%")
     print(f"  Runtime: {result['runtime_sec']/60:.1f} min")
-    print()
-    print(f"  Target: ~61.9% accuracy (original Colab Temporal run)")
 
-    out = cfg.EXPERIMENTS_DIR / "reproduce_v1_results.json"
+    out = EXPERIMENTS_DIR / "reproduce_v1_results.json"
     with open(out, "w") as f:
         json.dump(result, f, indent=2)
     print(f"\n  Saved to: {out}")
