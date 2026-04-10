@@ -87,3 +87,15 @@ run_1775624339, run_1775624344, run_1775624349, run_1775624355, run_1775624360, 
 
 ### Eval 2 — embed=16, heads=2 **(BEST PRECISION)** (walk-forward)
 run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, run_1775624548, run_1775624563, run_1775624578, run_1775624613, run_1775624631
+
+### Eval 3 — 1h data, embed=16, heads=2 (walk-forward)
+*(runs not individually tracked — Colab A100)*
+
+### Eval 4 — 1h data, embed=32, heads=4, 2 layers **(BEST OVERALL 63.3%)** (walk-forward)
+*(runs not individually tracked — Colab A100, TP=2.5%/SL=5%)*
+
+### Eval 5 — v7 simple 2+1 (walk-forward, TP=7.5%/SL=3%)
+*(eval_2plus1.py — Colab A100, batch=512, bf16. Results: experiments/eval_2plus1_results.json)*
+
+### Eval 6 — v8 enriched 2+1 (walk-forward, TP=7.5%/SL=3%)
+*(eval_2plus1.py — Colab A100, batch=512, bf16. Results: experiments/eval_2plus1_results.json)*

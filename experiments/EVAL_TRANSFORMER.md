@@ -153,6 +153,89 @@ Collected raw logits from walk-forward (10 folds, 20,435 test samples) and analy
 
 ---
 
+## 2+1 Spatial-Temporal Experiments (2026-04-10)
+
+Tested adding 1 temporal layer to the 2-layer spatial architecture (Eval 4). Two variants:
+- **v7 (simple 2+1):** Daily VP sum → 2 spatial layers → 1 temporal layer. Mean pool. v2 pipeline (60 feat). 31,073 params.
+- **v8 (enriched 2+1):** End-of-day VP → 2 spatial layers (CLS pool) → enrich with daily candle + VP structure → 1 temporal layer. v1 pipeline (68 feat). 33,281 params.
+
+Labels: FGI adaptive first-hit, TP=7.5% SL=3%. Colab A100, batch=512, mixed precision bf16.
+
+### Eval 5 — v7 Simple 2+1 (walk-forward, 31,073 params)
+
+**Overall:** 56.2% acc, 57.4% precision, F1=0.626
+
+| Fold | Period | Acc | vs Eval 4 |
+|------|--------|-----|-----------|
+| 1 | 2020 H2 | 64.0% | -24.4 |
+| 2 | 2021 H1 | 40.7% | -16.8 |
+| 3 | 2021 H2 | 47.4% | +3.0 |
+| 4 | 2022 H1 | 48.6% | -20.4 |
+| 5 | 2022 H2 | 71.1% | +4.7 |
+| 6 | 2023 H1 | 59.7% | +1.3 |
+| 7 | 2023 H2 | 69.2% | -11.8 |
+| 8 | 2024 H1 | 45.5% | -9.3 |
+| 9 | 2024 H2 | 58.7% | -14.2 |
+| 10 | 2025 H1 | 58.5% | +16.5 |
+
+**Regime EV:** Bull long +0.96%, Bull short -0.62%, Bear long +0.57%, Bear short -0.07%
+**Best strategy:** S1 Long only +0.79%
+
+**Notes:** Worse than Eval 4 on most folds. Temporal layer adds 9.5k params (data/param ratio drops to 0.9:1 on fold 1). Overfits on early folds with insufficient training data.
+
+---
+
+### Eval 6 — v8 Enriched 2+1 (walk-forward, 33,281 params)
+
+**Overall:** 58.0% acc, 60.4% precision, F1=0.610
+
+| Fold | Period | Acc | vs Eval 4 |
+|------|--------|-----|-----------|
+| 1 | 2020 H2 | 53.7% | -34.7 |
+| 2 | 2021 H1 | 42.4% | -15.1 |
+| 3 | 2021 H2 | 65.8% | +21.4 |
+| 4 | 2022 H1 | 55.6% | -13.4 |
+| 5 | 2022 H2 | 59.9% | -6.5 |
+| 6 | 2023 H1 | 49.6% | -8.8 |
+| 7 | 2023 H2 | 64.5% | -16.5 |
+| 8 | 2024 H1 | 64.3% | +9.5 |
+| 9 | 2024 H2 | 57.2% | -15.7 |
+| 10 | 2025 H1 | 66.0% | +24.0 |
+
+**Regime EV:** Bull long +1.08%, Bull short -0.55%, Bear long +1.07%, Bear short +0.62%
+**Best strategy:** S1 Long only +1.08%
+
+**Notes:** Bear short is positive (+0.62%) — v8 is only model with all-positive bear EVs. Bear precision 81.6% (highest of all models). But bull long EV dropped vs v6 (+1.08% vs +1.57%). Late folds (8, 10) improved significantly — enrichment + temporal helps with more training data.
+
+---
+
+### 2+1 Comparison (all on 7.5/3 FGI labels)
+
+| Model | Spatial | Temporal | Params | Acc | Bull long | Bear long | Bear short |
+|-------|---------|----------|--------|-----|-----------|-----------|------------|
+| v2 temporal | 1 | 1 | 23,041 | 56.7% | +0.41% | +1.04% | +0.42% |
+| v6 enriched | 1 | 1 | 24,737 | 58.4% | **+1.57%** | +1.02% | -0.04% |
+| v7 simple | 2 | 1 | 31,073 | 56.2% | +0.96% | +0.57% | -0.07% |
+| v8 enriched | 2 | 1 | 33,281 | 58.0% | +1.08% | +1.07% | **+0.62%** |
+
+**Conclusion:** Adding a second spatial layer does not improve over 1-layer variants. v6 (1+1 enriched) remains best for bull long EV. v8 has the broadest positive EV spread but lower peak performance. The extra spatial depth isn't earning its parameter cost at these data volumes.
+
+---
+
+### Training optimization (2026-04-10)
+
+Identified and fixed 6 bottlenecks in training pipeline:
+1. **Batch 64 → 512** on A100 (GPU was ~5% utilized)
+2. **Labels precomputed once** (was recomputed per fold, 30× redundant Python loops)
+3. **Mixed precision bf16** (~2× A100 throughput)
+4. **torch.compile** (10-30% free speedup)
+5. **pin_memory + 4 workers** (overlapped CPU→GPU transfer)
+6. **Vectorized index construction** (numpy vs Python loop)
+
+Result: **12-19 min per model** (10-fold walk-forward), down from ~70 min.
+
+---
+
 ## Infrastructure
 
 ### MPS (Metal) GPU acceleration
