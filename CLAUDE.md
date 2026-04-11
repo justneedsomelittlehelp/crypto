@@ -38,6 +38,7 @@ Read the relevant doc before modifying code in that domain:
 | **Transformer evals (6 evals, best: 63.3% on 1h, 2+1 tested)** | `experiments/EVAL_TRANSFORMER.md` |
 | **TP/SL sweep (11 configs, long+short, FGI vs SMA regime)** | `experiments/EVAL_TPSL_SWEEP.md` |
 | **Dual-branch Transformer (VP + Candle, separate attention)** | `experiments/EVAL_DUAL_BRANCH.md` |
+| **Model evolution history (living doc)** | `experiments/MODEL_HISTORY.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
 ## Key Data
