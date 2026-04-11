@@ -222,6 +222,74 @@ Labels: FGI adaptive first-hit, TP=7.5% SL=3%. Colab A100, batch=512, mixed prec
 
 ---
 
+## 15min Data Experiments (2026-04-11)
+
+Tested whether 4x more data (340k rows vs 84k) improves v6 and v8. 15min resolution, bars_per_day=96, lookback=2880 (30 days).
+
+### Eval 7 — v6 enriched 1+1 on 15min (24,737 params)
+
+**Overall:** 55.6% acc, 60.7% precision, F1=0.525
+
+| Fold | Period | Acc |
+|------|--------|-----|
+| 1 | 2020 H2 | 37.0% |
+| 2 | 2021 H1 | 56.9% |
+| 3 | 2021 H2 | 57.0% |
+| 4 | 2022 H1 | 61.4% |
+| 5 | 2022 H2 | 51.4% |
+| 6 | 2023 H1 | 48.7% |
+| 7 | 2023 H2 | 57.1% |
+| 8 | 2024 H1 | 58.3% |
+| 9 | 2024 H2 | 58.5% |
+| 10 | 2025 H1 | 70.6% |
+
+**Regime EV:** Bull long +0.64%, Bear long +0.69%, Bear short -0.06%
+**Best strategy:** S1 Long only +0.66%
+
+**Notes:** Worse than v6 on 1h (55.6% vs 58.4%). Early stopping at epoch 16 every fold — model converges in 1 epoch, remaining epochs just overfit. Architecture too small to benefit from 4x more data. LR=5e-4 is too high for 4x more gradient steps per epoch.
+
+---
+
+### Eval 8 — v8 enriched 2+1 on 15min (33,281 params) **NEW BEST ACCURACY**
+
+**Overall:** **59.6% acc**, 63.0% precision, F1=0.603
+
+| Fold | Period | Acc | vs v8 1h |
+|------|--------|-----|----------|
+| 1 | 2020 H2 | 36.2% | -17.5 |
+| 2 | 2021 H1 | 52.6% | +10.2 |
+| 3 | 2021 H2 | 58.6% | -7.2 |
+| 4 | 2022 H1 | 61.3% | +5.7 |
+| 5 | 2022 H2 | **66.8%** | +6.9 |
+| 6 | 2023 H1 | **64.5%** | +14.9 |
+| 7 | 2023 H2 | **77.2%** | +12.7 |
+| 8 | 2024 H1 | 51.4% | -12.9 |
+| 9 | 2024 H2 | 60.7% | +3.5 |
+| 10 | 2025 H1 | 68.3% | +2.3 |
+
+**Regime EV:** Bull long +0.82%, Bear long +0.80%, Bear short +0.48%
+**Best strategy:** S1 Long only +0.81%
+**Bear precision:** 79.0%
+
+**Notes:** Best overall accuracy on 7.5/3 labels (59.6%). Fold 7 at 77.2% is highest single fold on 7.5/3. Clear monotonic improvement with data volume (folds 1→7). Fold 8 collapsed (51.4%) — 2024 H1 transition period. v8's 2nd spatial layer finally earning its param cost with sufficient data (8:1 ratio on fold 1 vs 0.9:1 on 1h).
+
+However, **EVs are lower than 1h models**. v6 1h still best bull long (+1.57% vs +0.82%). 15min data adds noise that dilutes per-trade EV despite improving raw accuracy.
+
+---
+
+### 15min vs 1h full comparison
+
+| Model | Data | Acc | Bull long | Bear long | Bear short | S1 EV |
+|-------|------|-----|-----------|-----------|------------|-------|
+| v6 enriched | 1h | 58.4% | **+1.57%** | +1.02% | -0.04% | — |
+| v8 enriched | 1h | 58.0% | +1.08% | +1.07% | **+0.62%** | +1.08% |
+| v6 enriched | 15m | 55.6% | +0.64% | +0.69% | -0.06% | +0.66% |
+| **v8 enriched** | **15m** | **59.6%** | +0.82% | +0.80% | +0.48% | +0.81% |
+
+**Conclusion:** 15min data helps v8 accuracy (+1.6%) but not v6 (-2.8%). However, per-trade EV is lower on 15min — the noise from finer resolution dilutes the signal. v6 on 1h remains the most profitable per trade (bull long +1.57%). v8 on 15min is most accurate but less profitable.
+
+---
+
 ### Training optimization (2026-04-10)
 
 Identified and fixed 6 bottlenecks in training pipeline:

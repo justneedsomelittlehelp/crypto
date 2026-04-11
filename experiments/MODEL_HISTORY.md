@@ -166,7 +166,20 @@ Monotonically increasing with data volume. The 2nd spatial layer is finally earn
 
 v6 on 15min was worse than v6 on 1h (55.6% vs 58.4%) — early stopping at epoch 16 suggests it converges too fast with the larger dataset. The architecture is too small to benefit from more data.
 
-**Awaiting final folds 8-10 for complete evaluation.**
+### Final results (Eval 8):
+**59.6% accuracy — new best on 7.5/3 labels.** Bear precision 79.0%. Bear short EV +0.48%.
+
+| Fold | v8 15min | v8 1h |
+|------|----------|-------|
+| 8 | 51.4% | 64.3% |
+| 9 | 60.7% | 57.2% |
+| 10 | 68.3% | 66.0% |
+
+Fold 8 (2024 H1) collapsed to 51.4% — broke the upward trend. But folds 9-10 recovered.
+
+**However, EVs are lower than 1h models.** v6 1h still has best bull long EV (+1.57% vs v8 15min's +0.82%). 15min data adds noise that dilutes per-trade EV despite improving raw accuracy. More predictions ≠ more profit per prediction.
+
+**Conclusion:** v8 on 15min validates the "more data helps larger models" hypothesis for accuracy, but the EV story is more nuanced. For deployment, v6 on 1h may still be the better choice for profit per trade.
 
 ---
 
@@ -204,4 +217,16 @@ RNN (vanishing gradients)
 
 ---
 
-*Last updated: 2026-04-11. Next update after v8 15min results finalize.*
+## 10. Next Directions (as of 2026-04-11)
+
+The model has hit the **information ceiling of VP-only features** (~58-60% accuracy across all architectures). Next steps require new data sources:
+
+1. **FGI as input feature** (zero cost) — currently used only for label flipping. Feed raw FGI value and let model learn non-linear regime boundaries.
+2. **Funding rate + Open Interest** (from OKX API, free) — captures market leverage/positioning. Tells the model whether the crowd is pushing toward or away from VP barriers. OI drops detect liquidation cascades ("get in while others are dying").
+3. **Liquidation levels** (Coinglass, expensive) — exact price levels where leveraged positions get force-closed. Ruled out due to cost.
+
+The user's manual trading strategy combines VP (macro barriers) with liquidation heatmaps (micro barriers). OI + funding rate is the best available proxy for liquidation data.
+
+---
+
+*Last updated: 2026-04-11.*

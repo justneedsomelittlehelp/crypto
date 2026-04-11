@@ -1,0 +1,259 @@
+{
+  "config": {
+    "timeframe": "15m",
+    "tp": 0.075,
+    "sl": 0.03,
+    "batch_size": 256,
+    "lr": 0.0005,
+    "epochs": 50,
+    "patience": 15,
+    "lookback": 2880,
+    "bars_per_day": 96,
+    "mixed_precision": true,
+    "device": "cuda"
+  },
+  "v6": {
+    "model": "v6 enriched (1+1) on 15min",
+    "overall": {
+      "accuracy": 0.5564,
+      "precision": 0.6071,
+      "recall": 0.463,
+      "f1": 0.5253,
+      "tp": 32494,
+      "fp": 21031,
+      "tn": 41173,
+      "fn": 37691,
+      "n_samples": 132389,
+      "n_params": 24737,
+      "bull_stats": {
+        "tp": 7392,
+        "fp": 13936,
+        "tn": 34034,
+        "fn": 19339,
+        "precision": 0.3466,
+        "npv": 0.6377,
+        "accuracy": 0.5546,
+        "pred1_rate": 0.2855,
+        "n": 74701
+      },
+      "bear_stats": {
+        "tp": 25102,
+        "fp": 7095,
+        "tn": 7139,
+        "fn": 18352,
+        "precision": 0.7796,
+        "npv": 0.2801,
+        "accuracy": 0.5589,
+        "pred1_rate": 0.5581,
+        "n": 57688
+      },
+      "regime_ev": {
+        "bull_long": 0.64,
+        "bull_short": -0.8,
+        "bear_long": 0.69,
+        "bear_short": -0.06
+      },
+      "strategies": {
+        "S1: Long only (both regimes)": 0.66,
+        "S2: Long bull, skip bear": 0.36,
+        "S3: Both sides both regimes": 0.09,
+        "S4: Long bull + both bear": 0.5
+      }
+    },
+    "folds": [
+      {
+        "fold": 1,
+        "period": "2020-07-01 \u2192 2021-01-01",
+        "acc": 0.3695573426066797,
+        "n_test": 13803,
+        "time_sec": 454.2
+      },
+      {
+        "fold": 2,
+        "period": "2021-01-01 \u2192 2021-07-01",
+        "acc": 0.5687200182745755,
+        "n_test": 13133,
+        "time_sec": 500.6
+      },
+      {
+        "fold": 3,
+        "period": "2021-07-01 \u2192 2022-01-01",
+        "acc": 0.5701675643327349,
+        "n_test": 13368,
+        "time_sec": 570.1
+      },
+      {
+        "fold": 4,
+        "period": "2022-01-01 \u2192 2022-07-01",
+        "acc": 0.6135001896094047,
+        "n_test": 13185,
+        "time_sec": 694.6
+      },
+      {
+        "fold": 5,
+        "period": "2022-07-01 \u2192 2023-01-01",
+        "acc": 0.5136577207931831,
+        "n_test": 12557,
+        "time_sec": 749.5
+      },
+      {
+        "fold": 6,
+        "period": "2023-01-01 \u2192 2023-07-01",
+        "acc": 0.4871372549019608,
+        "n_test": 12750,
+        "time_sec": 809.7
+      },
+      {
+        "fold": 7,
+        "period": "2023-07-01 \u2192 2024-01-01",
+        "acc": 0.571271205111258,
+        "n_test": 13617,
+        "time_sec": 995.1
+      },
+      {
+        "fold": 8,
+        "period": "2024-01-01 \u2192 2024-07-01",
+        "acc": 0.5833024942639331,
+        "n_test": 13511,
+        "time_sec": 977.7
+      },
+      {
+        "fold": 9,
+        "period": "2024-07-01 \u2192 2025-01-01",
+        "acc": 0.5849592584286462,
+        "n_test": 13377,
+        "time_sec": 1196.6
+      },
+      {
+        "fold": 10,
+        "period": "2025-01-01 \u2192 2025-07-01",
+        "acc": 0.7059902200488998,
+        "n_test": 13088,
+        "time_sec": 1150.3
+      }
+    ],
+    "total_time_min": 135.0
+  },
+  "v8": {
+    "model": "v8 enriched (2+1) on 15min",
+    "overall": {
+      "accuracy": 0.5963,
+      "precision": 0.6303,
+      "recall": 0.577,
+      "f1": 0.6025,
+      "tp": 40497,
+      "fp": 23752,
+      "tn": 38452,
+      "fn": 29688,
+      "n_samples": 132389,
+      "n_params": 33281,
+      "bull_stats": {
+        "tp": 8764,
+        "fp": 15336,
+        "tn": 32634,
+        "fn": 17967,
+        "precision": 0.3637,
+        "npv": 0.6449,
+        "accuracy": 0.5542,
+        "pred1_rate": 0.3226,
+        "n": 74701
+      },
+      "bear_stats": {
+        "tp": 31733,
+        "fp": 8416,
+        "tn": 5818,
+        "fn": 11721,
+        "precision": 0.7904,
+        "npv": 0.3317,
+        "accuracy": 0.6509,
+        "pred1_rate": 0.696,
+        "n": 57688
+      },
+      "regime_ev": {
+        "bull_long": 0.82,
+        "bull_short": -0.73,
+        "bear_long": 0.8,
+        "bear_short": 0.48
+      },
+      "strategies": {
+        "S1: Long only (both regimes)": 0.81,
+        "S2: Long bull, skip bear": 0.46,
+        "S3: Both sides both regimes": 0.3,
+        "S4: Long bull + both bear": 0.74
+      }
+    },
+    "folds": [
+      {
+        "fold": 1,
+        "period": "2020-07-01 \u2192 2021-01-01",
+        "acc": 0.36209519669637036,
+        "n_test": 13803,
+        "time_sec": 449.9
+      },
+      {
+        "fold": 2,
+        "period": "2021-01-01 \u2192 2021-07-01",
+        "acc": 0.5260031980507119,
+        "n_test": 13133,
+        "time_sec": 510.7
+      },
+      {
+        "fold": 3,
+        "period": "2021-07-01 \u2192 2022-01-01",
+        "acc": 0.5857271095152603,
+        "n_test": 13368,
+        "time_sec": 583.4
+      },
+      {
+        "fold": 4,
+        "period": "2022-01-01 \u2192 2022-07-01",
+        "acc": 0.613045127038301,
+        "n_test": 13185,
+        "time_sec": 671.7
+      },
+      {
+        "fold": 5,
+        "period": "2022-07-01 \u2192 2023-01-01",
+        "acc": 0.6679143107430119,
+        "n_test": 12557,
+        "time_sec": 764.9
+      },
+      {
+        "fold": 6,
+        "period": "2023-01-01 \u2192 2023-07-01",
+        "acc": 0.6453333333333333,
+        "n_test": 12750,
+        "time_sec": 823.0
+      },
+      {
+        "fold": 7,
+        "period": "2023-07-01 \u2192 2024-01-01",
+        "acc": 0.7716824557538371,
+        "n_test": 13617,
+        "time_sec": 905.8
+      },
+      {
+        "fold": 8,
+        "period": "2024-01-01 \u2192 2024-07-01",
+        "acc": 0.5142476500629117,
+        "n_test": 13511,
+        "time_sec": 1048.8
+      },
+      {
+        "fold": 9,
+        "period": "2024-07-01 \u2192 2025-01-01",
+        "acc": 0.6067130148762802,
+        "n_test": 13377,
+        "time_sec": 1065.7
+      },
+      {
+        "fold": 10,
+        "period": "2025-01-01 \u2192 2025-07-01",
+        "acc": 0.6832976772616137,
+        "n_test": 13088,
+        "time_sec": 1165.5
+      }
+    ],
+    "total_time_min": 133.2
+  }
+}
