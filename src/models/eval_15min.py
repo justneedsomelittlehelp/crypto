@@ -53,10 +53,23 @@ from src.models.architectures.v8_enriched_2plus1 import EnrichedTemporalV8
 # ═══════════════════════════════════════════════════════════════════
 TP = 0.075
 SL = 0.03
-BATCH_SIZE = 256          # Smaller than 1h — 2880-length sequences use more memory
 LR = 5e-4
 NUM_WORKERS = 4
 USE_COMPILE = True
+
+# Auto-detect GPU memory and set batch size
+def _auto_batch_size():
+    if torch.cuda.is_available():
+        mem_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+        if mem_gb >= 40:    # A100 (80GB) or similar
+            return 256
+        elif mem_gb >= 14:  # T4 (16GB)
+            return 64
+        else:
+            return 32
+    return 32  # CPU/MPS fallback
+
+BATCH_SIZE = _auto_batch_size()
 BARS_PER_DAY = 96
 LOOKBACK = 2880           # 30 days × 96 bars/day
 N_DAYS = 30
