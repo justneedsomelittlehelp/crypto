@@ -35,28 +35,47 @@ RESULTS_PATH = EXPERIMENTS_DIR / "backtest_results.json"
 # Filter and sizing variants to test
 # ═══════════════════════════════════════════════════════════════════
 FILTER_VARIANTS = {
-    "unfiltered": {
-        "min_confidence": 0.50,
-        "min_asymmetry": 0.0,
-        "allow_pyramiding": False,   # Skip on overlap (high frequency)
-    },
+    # Strict (winners from previous backtest)
     "combined_65_15": {
         "min_confidence": 0.65,
         "min_asymmetry": 1.5,
-        "allow_pyramiding": True,    # Stack on overlap (high conviction)
+        "allow_pyramiding": True,
     },
     "combined_60_20": {
         "min_confidence": 0.60,
         "min_asymmetry": 2.0,
         "allow_pyramiding": True,
     },
+    # Looser variants (testing more signal capture)
+    "combined_60_15": {
+        "min_confidence": 0.60,
+        "min_asymmetry": 1.5,
+        "allow_pyramiding": True,
+    },
+    "combined_55_15": {
+        "min_confidence": 0.55,
+        "min_asymmetry": 1.5,
+        "allow_pyramiding": True,
+    },
+    "combined_55_10": {
+        "min_confidence": 0.55,
+        "min_asymmetry": 1.0,
+        "allow_pyramiding": True,
+    },
+    "combined_50_10": {
+        "min_confidence": 0.50,
+        "min_asymmetry": 1.0,
+        "allow_pyramiding": True,
+    },
 }
 
 SIZING_VARIANTS = {
-    "fixed_20pct": {"sizing_mode": "fixed_pct", "position_size_pct": 0.20},
-    "fixed_50pct": {"sizing_mode": "fixed_pct", "position_size_pct": 0.50},
-    "fixed_100pct": {"sizing_mode": "fixed_100"},
-    "dynamic": {"sizing_mode": "dynamic"},
+    # New: 10% per trade, no reserve, max 10 concurrent
+    "fixed_10pct_no_reserve": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 0.10,
+        "reserve_pct": 0.0,
+    },
 }
 
 
@@ -79,10 +98,10 @@ def run_one_backtest(data, filter_name, sizing_name):
     filter_cfg = FILTER_VARIANTS[filter_name]
     sizing_cfg = SIZING_VARIANTS[sizing_name]
 
-    # Build BacktestConfig
+    # Build BacktestConfig (sizing variant can override reserve_pct)
     config = BacktestConfig(
         starting_capital=5000.0,
-        reserve_pct=0.30,
+        reserve_pct=sizing_cfg.get("reserve_pct", 0.30),
         max_hold_bars=14 * 24,
         direction="long",
         # Filter
