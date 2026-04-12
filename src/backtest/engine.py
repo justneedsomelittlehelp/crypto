@@ -49,8 +49,14 @@ class BacktestConfig:
     direction: str = "long"            # "long" or "short" or "both"
 
     # Filter (applied to predictions before considering)
-    min_confidence: float = 0.50       # sigmoid > this to consider
+    min_confidence: float = 0.50       # sigmoid > this to consider (binary mode)
     min_asymmetry: float = 0.0         # tp_pct / sl_pct > this
+
+    # Prediction interpretation
+    # "binary"     → use `probs` (sigmoid) with min_confidence
+    # "regression" → use `predicted_returns` with min_predicted_return
+    prediction_mode: str = "binary"
+    min_predicted_return: float = 0.0  # threshold when prediction_mode == "regression"
 
     # Leverage
     leverage: float = 1.0              # 1.0 = spot/no leverage, N = N× exposure
@@ -424,19 +430,24 @@ class Portfolio:
 # Engine entry point
 # ═══════════════════════════════════════════════════════════════════
 def run_backtest(
-    dates: np.ndarray,           # (N,) np.datetime64 or pd.Timestamp
-    close_prices: np.ndarray,    # (N,) close price at each bar
-    probs: np.ndarray,           # (N,) sigmoid output, 0-1
-    tp_pct: np.ndarray,          # (N,) per-sample TP %
-    sl_pct: np.ndarray,          # (N,) per-sample SL %
+    dates: np.ndarray,                          # (N,) np.datetime64 or pd.Timestamp
+    close_prices: np.ndarray,                   # (N,) close price at each bar
+    tp_pct: np.ndarray,                         # (N,) per-sample TP %
+    sl_pct: np.ndarray,                         # (N,) per-sample SL %
     config: BacktestConfig,
+    probs: np.ndarray = None,                   # (N,) sigmoid output, 0-1 (binary mode)
+    predicted_returns: np.ndarray = None,       # (N,) predicted P&L (regression mode)
 ) -> tuple[Portfolio, dict]:
     """Run a backtest over the predictions.
 
     For each bar:
       1. Check open positions for exit
-      2. Check if signal fires (probs > min_confidence AND tp/sl > min_asymmetry)
+      2. Check if signal fires (mode-dependent threshold AND tp/sl > min_asymmetry)
       3. If signal fires AND capital available, open new position
+
+    Signal interpretation depends on `config.prediction_mode`:
+      - "binary":     uses `probs` with `config.min_confidence`
+      - "regression": uses `predicted_returns` with `config.min_predicted_return`
     """
     portfolio = Portfolio(config)
 
@@ -444,17 +455,38 @@ def run_backtest(
     safe_ratio = tp_pct / np.clip(sl_pct, 1e-8, None)
     asymmetry_mask = safe_ratio > config.min_asymmetry
 
-    if config.direction == "long":
-        signal_mask = (probs > config.min_confidence) & asymmetry_mask
-        directions = np.full(len(probs), 1, dtype=np.int8)
-    elif config.direction == "short":
-        signal_mask = (probs < (1 - config.min_confidence)) & asymmetry_mask
-        directions = np.full(len(probs), -1, dtype=np.int8)
-    else:  # both
-        long_signal = (probs > config.min_confidence) & asymmetry_mask
-        short_signal = (probs < (1 - config.min_confidence)) & asymmetry_mask
-        signal_mask = long_signal | short_signal
-        directions = np.where(probs > 0.5, 1, -1).astype(np.int8)
+    if config.prediction_mode == "regression":
+        if predicted_returns is None:
+            raise ValueError("prediction_mode='regression' requires predicted_returns")
+        n = len(predicted_returns)
+        # Long: predicted_return > threshold (positive expected P&L).
+        # Short: predicted_return < -threshold (negative expected P&L).
+        if config.direction == "long":
+            signal_mask = (predicted_returns > config.min_predicted_return) & asymmetry_mask
+            directions = np.full(n, 1, dtype=np.int8)
+        elif config.direction == "short":
+            signal_mask = (predicted_returns < -config.min_predicted_return) & asymmetry_mask
+            directions = np.full(n, -1, dtype=np.int8)
+        else:  # both
+            long_signal = (predicted_returns > config.min_predicted_return) & asymmetry_mask
+            short_signal = (predicted_returns < -config.min_predicted_return) & asymmetry_mask
+            signal_mask = long_signal | short_signal
+            directions = np.where(predicted_returns > 0, 1, -1).astype(np.int8)
+    else:
+        if probs is None:
+            raise ValueError("prediction_mode='binary' requires probs")
+        n = len(probs)
+        if config.direction == "long":
+            signal_mask = (probs > config.min_confidence) & asymmetry_mask
+            directions = np.full(n, 1, dtype=np.int8)
+        elif config.direction == "short":
+            signal_mask = (probs < (1 - config.min_confidence)) & asymmetry_mask
+            directions = np.full(n, -1, dtype=np.int8)
+        else:  # both
+            long_signal = (probs > config.min_confidence) & asymmetry_mask
+            short_signal = (probs < (1 - config.min_confidence)) & asymmetry_mask
+            signal_mask = long_signal | short_signal
+            directions = np.where(probs > 0.5, 1, -1).astype(np.int8)
 
     n_signals = int(signal_mask.sum())
 
