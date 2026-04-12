@@ -421,7 +421,76 @@ Accuracy is a bad metric. Precision × magnitude × low-variance is the right me
 
 ---
 
-## 14. Next Directions (as of 2026-04-12)
+## 14. First Realistic Backtest (Eval 13, 2026-04-12)
+
+**Reality check on the +3.98% per-trade edge** — what does it actually look like with capital constraints, fees, slippage, and pyramiding rules?
+
+### Setup
+
+- Starting capital: $5,000
+- Reserve: 30% of equity (dynamic)
+- Fees: taker entry 0.26%, maker TP exit 0.16%, taker SL exit 0.26%
+- Slippage: 0.05% per side
+- Max hold: 14 days
+- 12 combinations tested: 3 filters × 4 sizing strategies
+- Period: 2020-07-01 → 2025-07-01 (5 years), 27,842 hourly bars
+
+### Results — top 3 strategies
+
+| Filter | Sizing | Final $ | Return | CAGR | Max DD | Sharpe | Trades | Win % |
+|--------|--------|---------|--------|------|--------|--------|--------|-------|
+| combined_60_20 | fixed_100pct | **$6,425** | **+28.5%** | **+7.1%** | -6.5% | 1.83 | 49 | 57.1% |
+| combined_60_20 | fixed_50pct | $6,319 | +26.4% | +6.6% | -6.6% | 1.78 | 65 | 55.4% |
+| combined_60_20 | dynamic | $6,151 | +23.0% | +5.8% | -6.5% | **5.93** | 129 | **76.7%** |
+
+### Major findings
+
+**1. The "less strict" filter wins.** combined_60_20 (conf > 0.60 + asym > 2.0) beat combined_65_15 (conf > 0.65 + asym > 1.5) across every sizing variant. Per-trade EV from Eval 12 suggested the opposite. Why? Capital constraints select which signals you actually take, and the slightly looser filter has more frequent signals — capital efficiency beats per-trade precision when capital is the bottleneck.
+
+**2. Per-trade EV (eval) ≠ Real CAGR (backtest).** Eval 12 said +3.98% per trade with 78% precision. Backtest gave +28.5% over 3.66 years (~7.1% CAGR) with 57% win rate.
+- Of 481 signals fired, only 49 executed (10%)
+- 432 skipped due to capital lockup
+- The 47 trades that DID execute had only 55% win rate, not 78%
+- **Capital constraint biased trade selection toward worse outcomes** — when you're locked in a losing trade, you miss the next great signal
+
+**3. Filter alone cuts drawdown 10x.**
+- combined_60_20 max DD: -6.5%
+- unfiltered max DD: -68% on full allocation, -41% on 50%
+- Even at +16% return, unfiltered's -68% drawdown is untradeable
+
+**4. Dynamic sizing has Sharpe 5.93 but lower returns.** 129 trades vs 49 (split capital allows more concurrent positions), 76.7% win rate (capital flow lets you not get stuck in losing trades during good signals), but smaller per-trade contribution to compounding.
+
+**5. First trade not until 2021-04-19** (despite period starting 2020-07-01). Fold 1 ensemble couldn't find qualifying long signals — dataset scarcity at that fold's training period made the model too conservative.
+
+### The honest comparison
+
+| | Our bot | Passive BTC HODL | S&P 500 |
+|---|---|---|---|
+| CAGR | +7.1% | ~+15% | ~+10% |
+| Max DD | **-6.5%** | -70% | -25% |
+| Sharpe | 1.83 | ~0.5 | ~0.6 |
+
+Half the return of HODL but **one-tenth the drawdown** and **3x Sharpe**. Better risk-adjusted but lower headline number than HODL.
+
+**Verdict:** Profitable but not yet compelling vs index funds. CAGR needs to roughly double to be a serious capital allocation choice.
+
+### Path to higher CAGR (next experiments)
+
+1. **Smart pyramiding** — allow multiple concurrent positions with scaled sizing (50/33/25/20/15% as concurrent count grows)
+2. **Looser filter** — combined_55_10 to capture more signals
+3. **Trade short side** — model's bear NPV is also strong (~78%); leaving money on the table by long-only
+4. **Multi-strategy ensemble** — long + short + loose filter strategies sharing capital, smoother utilization
+5. **15min data retrain** — 4x more bars = 4x more signals (untested with v6-prime)
+
+Files:
+- Eval script: `src/models/eval_v6_prime.py` (predictions cache)
+- Backtest engine: `src/backtest/engine.py`
+- Backtest driver: `src/models/run_backtest.py`
+- Results: `experiments/backtest_results.json`
+
+---
+
+## 15. Next Directions (as of 2026-04-12)
 
 **⭐⭐ NEW BEST (2026-04-12): v6-prime + 3-seed ensemble + SWA + combined filter (conf>0.65 AND asym>1.5) → +3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97, max 23 consecutive losses. See Eval 12.**
 

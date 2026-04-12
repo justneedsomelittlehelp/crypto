@@ -212,7 +212,62 @@ Per-fold real EV (computed from actual per-sample TP/SL, not fixed ratios):
 
 ---
 
-## Eval 12 — v6-prime + Multi-seed + SWA + Combined Filter ⭐⭐ NEW BEST (2026-04-12)
+## Eval 13 — Realistic Backtest (2026-04-12)
+
+First sequential portfolio simulation of v6-prime predictions with capital constraints, fees, slippage, and pyramiding rules. Tested 12 combinations: 3 filters × 4 sizing strategies.
+
+### Setup
+
+| Parameter | Value |
+|---|---|
+| Starting capital | $5,000 |
+| Reserve | 30% of equity (untouchable) |
+| Fees | Taker entry 0.26%, Maker TP 0.16%, Taker SL 0.26% |
+| Slippage | 0.05% per side |
+| Max hold | 14 days |
+| Period | 2020-07-01 → 2025-07-01 (5 years) |
+| Tradeable bars | 27,842 hourly |
+
+### Top 3 strategies
+
+| Filter | Sizing | Final $ | Return | CAGR | Max DD | Sharpe | Trades | Win % |
+|--------|--------|---------|--------|------|--------|--------|--------|-------|
+| combined_60_20 | fixed_100pct | **$6,425** | **+28.5%** | **+7.1%** | -6.5% | 1.83 | 49 | 57.1% |
+| combined_60_20 | fixed_50pct | $6,319 | +26.4% | +6.6% | -6.6% | 1.78 | 65 | 55.4% |
+| combined_60_20 | dynamic | $6,151 | +23.0% | +5.8% | -6.5% | **5.93** | 129 | **76.7%** |
+
+### Surprises
+
+**1. Less strict filter wins.** combined_60_20 beat combined_65_15 across every sizing variant. Eval 12's per-trade analysis suggested the opposite.
+
+**2. Per-trade EV → Real CAGR is much smaller.** +3.98% per trade became +7.1% CAGR because:
+- Of 481 signals, only 49 executed (89% skipped for capital lockup)
+- 78% precision dropped to 57% win rate (capital constraints select worse trades)
+
+**3. Filter cuts drawdown 10x.** Combined filter -6.5% vs unfiltered -68%.
+
+**4. Dynamic sizing has Sharpe 5.93 but lower returns.** 76.7% win rate but smaller per-trade contribution.
+
+### Comparison
+
+| | Our bot | Passive BTC HODL | S&P 500 |
+|---|---|---|---|
+| CAGR | +7.1% | ~+15% | ~+10% |
+| Max DD | **-6.5%** | -70% | -25% |
+| Sharpe | 1.83 | ~0.5 | ~0.6 |
+
+Better risk-adjusted than HODL or S&P, but lower headline number than HODL. Need ~12-15% CAGR to be a serious capital allocation.
+
+### Next experiments
+
+1. **Smart pyramiding** with scaled sizing (50/33/25/20/15% as concurrent count grows)
+2. **Looser filter** (combined_55_10)
+3. **Trade short side** (model's bear NPV is also strong)
+4. **Multi-strategy ensemble** sharing capital across long + short + loose strategies
+
+---
+
+## Eval 12 — v6-prime + Multi-seed + SWA + Combined Filter ⭐⭐ Per-trade best (2026-04-12)
 
 **NEW BENCHMARK: 435 trades, 78.4% precision, +3.98% EV per trade, Sharpe 0.97.**
 

@@ -115,5 +115,8 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 ### Eval 11 — v6-prime + filter analysis (asymmetry filter, single seed, superseded)
 *(eval_v6_prime.py with filter analysis — post-hoc selection by tp_pct/sl_pct > 2.0 → +3.49% EV per trade on 652 trades.)*
 
-### Eval 12 — v6-prime + 3 seeds + SWA + combined filter **⭐⭐ NEW BEST**
+### Eval 12 — v6-prime + 3 seeds + SWA + combined filter **⭐⭐ Per-trade best**
 *(eval_v6_prime.py with N_SEEDS=3, SWA_START=15. Combined filter (conf>0.65 + asym>1.5) → **+3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97**. Fold 1 collapse fixed by ensembling. Results: experiments/eval_v6_prime_results.json)*
+
+### Eval 13 — Realistic backtest (12 filter × sizing combinations) **⭐ Reality check**
+*(run_backtest.py — sequential portfolio simulator with $5k capital, fees, slippage, capital constraints. Best: combined_60_20 + fixed_100pct → +28.5% return / +7.1% CAGR / -6.5% DD / Sharpe 1.83 / 49 trades over 3.66 years. Per-trade EV 3.98% in eval became 7.1% CAGR in backtest because 432 of 481 signals skipped for capital. Results: experiments/backtest_results.json)*

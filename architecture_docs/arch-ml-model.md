@@ -162,6 +162,17 @@ For production trading (not yet implemented — Phase 4-5):
 
 ## Backtesting
 
+**Current best backtest result (Eval 13, 2026-04-12):**
+- Filter: `combined_60_20` (conf > 0.60 + asym > 2.0)
+- Sizing: `fixed_100pct` (one position at a time)
+- **+28.5% total return over 3.66 years**, **+7.1% CAGR**, **-6.5% max DD**, **Sharpe 1.83**
+- 49 trades executed of 481 signals fired (432 skipped for capital lockup)
+- 57.1% win rate, avg hold 2.7 days
+
+Compared to passive: half the return of HODL but 1/10 the drawdown and 3x Sharpe. Profitable but not yet good enough to displace S&P 500 allocation (~10% CAGR with -25% DD).
+
+Next iteration: pyramiding + looser filter + short-side trading should roughly double the trade count and CAGR.
+
 `src/backtest/engine.py` provides realistic portfolio simulation:
 - Portfolio class with cash, open positions, equity history
 - Walks through bars chronologically
