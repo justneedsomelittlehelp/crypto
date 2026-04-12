@@ -44,37 +44,26 @@ FILTER_VARIANTS = {
 }
 
 SIZING_VARIANTS = {
-    # Position size sweep with no reserve, finding optimum capital utilization
-    "fixed_100pct_no_reserve": {
-        "sizing_mode": "fixed_pct",
-        "position_size_pct": 1.00,
-        "reserve_pct": 0.0,
-    },
-    "fixed_50pct_no_reserve": {
-        "sizing_mode": "fixed_pct",
-        "position_size_pct": 0.50,
-        "reserve_pct": 0.0,
-    },
-    "fixed_33pct_no_reserve": {
-        "sizing_mode": "fixed_pct",
-        "position_size_pct": 0.33,
-        "reserve_pct": 0.0,
-    },
-    "fixed_25pct_no_reserve": {
-        "sizing_mode": "fixed_pct",
-        "position_size_pct": 0.25,
-        "reserve_pct": 0.0,
-    },
-    "fixed_20pct_no_reserve": {
-        "sizing_mode": "fixed_pct",
-        "position_size_pct": 0.20,
-        "reserve_pct": 0.0,
-    },
-    "fixed_10pct_no_reserve": {
-        "sizing_mode": "fixed_pct",
-        "position_size_pct": 0.10,
-        "reserve_pct": 0.0,
-    },
+    # Sizing × leverage sweep on combined_60_20 (4 sizings × 4 leverages = 16 runs)
+    "100pct_1x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 1.0},
+    "100pct_2x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 2.0},
+    "100pct_3x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
+    "100pct_5x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 5.0},
+
+    "50pct_1x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 1.0},
+    "50pct_2x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 2.0},
+    "50pct_3x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 3.0},
+    "50pct_5x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 5.0},
+
+    "33pct_1x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 1.0},
+    "33pct_2x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 2.0},
+    "33pct_3x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 3.0},
+    "33pct_5x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 5.0},
+
+    "25pct_1x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 1.0},
+    "25pct_2x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 2.0},
+    "25pct_3x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 3.0},
+    "25pct_5x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 5.0},
 }
 
 
@@ -97,7 +86,7 @@ def run_one_backtest(data, filter_name, sizing_name):
     filter_cfg = FILTER_VARIANTS[filter_name]
     sizing_cfg = SIZING_VARIANTS[sizing_name]
 
-    # Build BacktestConfig (sizing variant can override reserve_pct)
+    # Build BacktestConfig (sizing variant can override reserve_pct and leverage)
     config = BacktestConfig(
         starting_capital=5000.0,
         reserve_pct=sizing_cfg.get("reserve_pct", 0.30),
@@ -110,6 +99,8 @@ def run_one_backtest(data, filter_name, sizing_name):
         # Sizing
         sizing_mode=sizing_cfg["sizing_mode"],
         position_size_pct=sizing_cfg.get("position_size_pct", 0.20),
+        # Leverage
+        leverage=sizing_cfg.get("leverage", 1.0),
     )
 
     # Parse dates from cached array

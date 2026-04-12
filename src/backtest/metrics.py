@@ -31,11 +31,14 @@ def compute_metrics(portfolio: Portfolio, starting_capital: float) -> dict:
             "entry_date": t.entry_date,
             "exit_date": t.exit_date,
             "size_dollars": t.size_dollars,
+            "exposure_dollars": getattr(t, "exposure_dollars", t.size_dollars),
+            "leverage": getattr(t, "leverage", 1.0),
             "pnl_dollars": t.pnl_dollars,
             "pnl_pct": t.pnl_pct,
             "exit_reason": t.exit_reason,
             "hold_bars": t.hold_bars,
             "fees": t.fees_total,
+            "funding": getattr(t, "funding_total", 0.0),
         }
         for t in trades_sorted
     ])
@@ -55,6 +58,7 @@ def compute_metrics(portfolio: Portfolio, starting_capital: float) -> dict:
     avg_loss_pct = float(df.loc[df["pnl_pct"] < 0, "pnl_pct"].mean() * 100) if n_losses > 0 else 0.0
     avg_trade_pct = float(df["pnl_pct"].mean() * 100)
     total_fees = float(df["fees"].sum())
+    total_funding = float(df["funding"].sum()) if "funding" in df.columns else 0.0
 
     # Hold time
     avg_hold_bars = float(df["hold_bars"].mean())
@@ -137,6 +141,7 @@ def compute_metrics(portfolio: Portfolio, starting_capital: float) -> dict:
         "avg_win_pct": round(avg_win_pct, 3),
         "avg_loss_pct": round(avg_loss_pct, 3),
         "total_fees": round(total_fees, 2),
+        "total_funding": round(total_funding, 2),
 
         # Time
         "first_trade_date": str(first_date.date()),

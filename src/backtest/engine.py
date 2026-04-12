@@ -52,6 +52,11 @@ class BacktestConfig:
     min_confidence: float = 0.50       # sigmoid > this to consider
     min_asymmetry: float = 0.0         # tp_pct / sl_pct > this
 
+    # Leverage
+    leverage: float = 1.0              # 1.0 = spot/no leverage, N = N× exposure
+    funding_rate_per_8h: float = 0.0001  # 0.01% per 8h funding (typical avg)
+    liquidation_threshold: float = 0.95  # Liquidate at 95% loss of margin
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Position
@@ -61,13 +66,15 @@ class Position:
     entry_bar: int
     entry_date: pd.Timestamp
     entry_price: float
-    size_dollars: float        # Notional position size in $
-    btc_amount: float          # How much BTC the size_dollars buys
+    size_dollars: float        # Margin locked (the dollars you commit)
+    exposure_dollars: float    # Actual notional exposure = size × leverage
+    btc_amount: float          # BTC controlled by exposure (not just margin)
     direction: int             # +1 long, -1 short
     tp_level: float            # Absolute price for TP
     sl_level: float            # Absolute price for SL
     tp_pct: float              # Original tp_pct (informational)
     sl_pct: float              # Original sl_pct (informational)
+    leverage: float            # Leverage used (1.0 = spot)
     entry_fee: float           # $ fee paid on entry
 
 
@@ -83,13 +90,16 @@ class ClosedTrade:
     entry_price: float
     exit_price: float
     size_dollars: float
+    exposure_dollars: float
+    leverage: float
     direction: int
     tp_pct: float
     sl_pct: float
-    exit_reason: str           # "tp", "sl", "timeout"
-    pnl_dollars: float         # Net P&L after fees and slippage
-    pnl_pct: float             # P&L as % of position size
+    exit_reason: str           # "tp", "sl", "timeout", "liquidated"
+    pnl_dollars: float         # Net P&L after fees, slippage, funding
+    pnl_pct: float             # P&L as % of margin (not exposure)
     fees_total: float
+    funding_total: float       # Cumulative funding paid
     slippage_total: float
     hold_bars: int
 
@@ -140,15 +150,15 @@ class Portfolio:
             return avail * self.cfg.position_size_pct
 
     def update_equity(self, current_price: float):
-        """Mark-to-market: equity = cash + sum of open positions valued at current price."""
+        """Mark-to-market: equity = cash + margin value of open positions.
+
+        For leveraged positions, the margin value = original margin + unrealized P&L.
+        Unrealized P&L = (current_price - entry_price) × btc_amount × direction.
+        """
         position_value = 0.0
         for p in self.open_positions:
-            if p.direction == 1:
-                # Long: value = btc_amount × current_price
-                position_value += p.btc_amount * current_price
-            else:
-                # Short: value = entry_dollars + (entry_price - current_price) × btc_amount
-                position_value += p.size_dollars + (p.entry_price - current_price) * p.btc_amount
+            unrealized_pnl = (current_price - p.entry_price) * p.btc_amount * p.direction
+            position_value += p.size_dollars + unrealized_pnl
         self.equity = self.cash + position_value
 
     def try_open_position(
@@ -164,11 +174,15 @@ class Portfolio:
                     self.signals_skipped_pyramid += 1
                     return False
 
-        # Compute size
+        # Compute size (margin)
         size_dollars = self.compute_position_size()
         if size_dollars < 10.0:  # Minimum $10 position to avoid dust
             self.signals_skipped_no_capital += 1
             return False
+
+        # Leverage: exposure = margin × leverage
+        leverage = self.cfg.leverage
+        exposure_dollars = size_dollars * leverage
 
         # Apply entry slippage
         if direction == 1:
@@ -176,14 +190,14 @@ class Portfolio:
         else:
             entry_price = price * (1 - self.cfg.slippage_per_side)
 
-        # Entry fee (taker — market order)
-        entry_fee = size_dollars * self.cfg.fee_taker
+        # Entry fee (taker — market order). Fee is on EXPOSURE not margin.
+        entry_fee = exposure_dollars * self.cfg.fee_taker
 
-        # BTC amount we get for our dollars (after slippage and fee)
-        net_dollars = size_dollars - entry_fee
-        btc_amount = net_dollars / entry_price
+        # BTC amount controlled by exposure (not just margin)
+        net_exposure = exposure_dollars - entry_fee
+        btc_amount = net_exposure / entry_price
 
-        # Compute TP/SL levels
+        # Compute TP/SL levels (in absolute price space, unchanged by leverage)
         if direction == 1:
             tp_level = entry_price * (1 + tp_pct)
             sl_level = entry_price * (1 - sl_pct)
@@ -196,16 +210,18 @@ class Portfolio:
             entry_date=date,
             entry_price=entry_price,
             size_dollars=size_dollars,
+            exposure_dollars=exposure_dollars,
             btc_amount=btc_amount,
             direction=direction,
             tp_level=tp_level,
             sl_level=sl_level,
             tp_pct=tp_pct,
             sl_pct=sl_pct,
+            leverage=leverage,
             entry_fee=entry_fee,
         )
         self.open_positions.append(position)
-        self.cash -= size_dollars  # Lock the dollars
+        self.cash -= size_dollars  # Lock margin (not exposure)
         return True
 
     def try_close_positions(self, bar_idx: int, date: pd.Timestamp, price: float):
@@ -215,21 +231,33 @@ class Portfolio:
             exit_reason = None
             exit_price = price
 
+            # Liquidation check (for leveraged positions)
+            # Unrealized loss in dollars; if it exceeds liquidation_threshold × margin, liquidate
+            unrealized_pnl = (price - p.entry_price) * p.btc_amount * p.direction
+            if unrealized_pnl < -p.size_dollars * self.cfg.liquidation_threshold:
+                exit_reason = "liquidated"
+                # Liquidation price = the price where loss = threshold × margin
+                # solve: (liq_price - entry) × btc × dir = -threshold × margin
+                threshold_loss = -self.cfg.liquidation_threshold * p.size_dollars
+                liq_price = p.entry_price + (threshold_loss / (p.btc_amount * p.direction))
+                exit_price = liq_price
+
             # Check TP/SL
-            if p.direction == 1:
-                if price >= p.tp_level:
-                    exit_reason = "tp"
-                    exit_price = p.tp_level
-                elif price <= p.sl_level:
-                    exit_reason = "sl"
-                    exit_price = p.sl_level
-            else:
-                if price <= p.tp_level:
-                    exit_reason = "tp"
-                    exit_price = p.tp_level
-                elif price >= p.sl_level:
-                    exit_reason = "sl"
-                    exit_price = p.sl_level
+            if exit_reason is None:
+                if p.direction == 1:
+                    if price >= p.tp_level:
+                        exit_reason = "tp"
+                        exit_price = p.tp_level
+                    elif price <= p.sl_level:
+                        exit_reason = "sl"
+                        exit_price = p.sl_level
+                else:
+                    if price <= p.tp_level:
+                        exit_reason = "tp"
+                        exit_price = p.tp_level
+                    elif price >= p.sl_level:
+                        exit_reason = "sl"
+                        exit_price = p.sl_level
 
             # Check timeout
             if exit_reason is None and (bar_idx - p.entry_bar) >= self.cfg.max_hold_bars:
@@ -249,37 +277,47 @@ class Portfolio:
         self, p: Position, bar_idx: int, date: pd.Timestamp,
         exit_price: float, exit_reason: str,
     ):
-        """Compute P&L, fees, and add to closed trades log."""
+        """Compute P&L on leveraged position, deduct fees + funding + slippage."""
         # Apply exit slippage (opposite direction from entry slippage)
         if p.direction == 1:
             actual_exit_price = exit_price * (1 - self.cfg.slippage_per_side)
         else:
             actual_exit_price = exit_price * (1 + self.cfg.slippage_per_side)
 
-        # Exit fee depends on type
+        # Exit fee rate depends on exit type
         if exit_reason == "tp":
             exit_fee_rate = self.cfg.fee_maker      # TP via limit order
         else:
-            exit_fee_rate = self.cfg.fee_taker      # SL or timeout = market
+            exit_fee_rate = self.cfg.fee_taker      # SL/timeout/liquidation = market
 
-        # Compute exit dollars
-        if p.direction == 1:
-            gross_dollars = p.btc_amount * actual_exit_price
-        else:
-            # Short: profit = (entry_price - exit_price) × btc_amount + size_dollars
-            gross_dollars = p.size_dollars + (p.entry_price - actual_exit_price) * p.btc_amount
+        # Gross P&L on exposure (leveraged amount)
+        # = (exit - entry) × btc_amount × direction
+        # btc_amount already represents the leveraged BTC controlled
+        gross_pnl = (actual_exit_price - p.entry_price) * p.btc_amount * p.direction
 
-        exit_fee = gross_dollars * exit_fee_rate
-        net_dollars = gross_dollars - exit_fee
+        # Exit fee on exit notional value
+        exit_notional = p.btc_amount * actual_exit_price
+        exit_fee = exit_notional * exit_fee_rate
 
-        # P&L = net received - originally locked (size_dollars)
-        pnl = net_dollars - p.size_dollars
-        pnl_pct = pnl / p.size_dollars
+        # Funding cost (for leveraged perp positions)
+        # Funding paid every 8h (8 bars at 1h) on the FULL exposure
+        hold_bars = bar_idx - p.entry_bar
+        funding_periods = hold_bars / 8.0  # Number of 8h periods held
+        funding_total = p.exposure_dollars * self.cfg.funding_rate_per_8h * funding_periods
 
-        slippage_total = (
-            p.size_dollars * self.cfg.slippage_per_side
-            + gross_dollars * self.cfg.slippage_per_side
-        )
+        # Net P&L = gross P&L - exit fee - funding (entry fee already deducted from btc_amount)
+        # Actually, entry fee was deducted when computing btc_amount, so it's already implicit
+        # in btc_amount × prices. But for accounting clarity we track it separately.
+        net_pnl = gross_pnl - exit_fee - funding_total
+
+        # If liquidated, cap net_pnl at -margin (can't lose more than margin)
+        if exit_reason == "liquidated":
+            net_pnl = max(net_pnl, -p.size_dollars)
+
+        # P&L as % of margin (not exposure) — this is the "return on capital deployed"
+        pnl_pct = net_pnl / p.size_dollars
+
+        slippage_total = p.exposure_dollars * self.cfg.slippage_per_side * 2  # both sides
         fees_total = p.entry_fee + exit_fee
 
         trade = ClosedTrade(
@@ -290,18 +328,22 @@ class Portfolio:
             entry_price=p.entry_price,
             exit_price=actual_exit_price,
             size_dollars=p.size_dollars,
+            exposure_dollars=p.exposure_dollars,
+            leverage=p.leverage,
             direction=p.direction,
             tp_pct=p.tp_pct,
             sl_pct=p.sl_pct,
             exit_reason=exit_reason,
-            pnl_dollars=pnl,
+            pnl_dollars=net_pnl,
             pnl_pct=pnl_pct,
             fees_total=fees_total,
+            funding_total=funding_total,
             slippage_total=slippage_total,
-            hold_bars=bar_idx - p.entry_bar,
+            hold_bars=hold_bars,
         )
         self.closed_trades.append(trade)
-        self.cash += net_dollars
+        # Return margin + net P&L to cash
+        self.cash += p.size_dollars + net_pnl
         self.equity_history.append((date, self.cash + sum(
             pp.size_dollars for pp in self.open_positions
         )))
