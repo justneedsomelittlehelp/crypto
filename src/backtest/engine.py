@@ -62,6 +62,7 @@ class BacktestConfig:
     circuit_breaker_pause_bars: int = 0  # Time-based pause after dd breaker triggers (e.g., 720 = 30 days)
     max_consec_losses: int = 0         # 0 = disabled. Trigger killswitch after N consecutive losses
     killswitch_pause_bars: int = 0     # Pause duration after killswitch (in bars)
+    post_sl_pause_bars: int = 0        # 0 = disabled. Pause N bars after each SL/liquidation hit
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -133,6 +134,8 @@ class Portfolio:
         self.consecutive_losses = 0
         self.killswitch_until_bar = -1
         self.dd_breaker_triggers = 0     # Count how many times DD breaker fired
+        self.post_sl_pause_until_bar = -1  # Pause until this bar (post-SL cooldown)
+        self.post_sl_pause_triggers = 0    # Count post-SL pauses
 
     def available_capital(self) -> float:
         """Capital available for new positions = (equity × (1 - reserve_pct)) - committed."""
@@ -202,6 +205,8 @@ class Portfolio:
         if self.dd_breaker_until_bar > bar_idx:
             return True
         if self.killswitch_until_bar > bar_idx:
+            return True
+        if self.post_sl_pause_until_bar > bar_idx:
             return True
         return False
 
@@ -407,6 +412,12 @@ class Portfolio:
                 self.consecutive_losses = 0  # Reset after triggering
         else:
             self.consecutive_losses = 0
+
+        # Post-SL cooldown: pause new entries after each SL/liquidation hit
+        if (self.cfg.post_sl_pause_bars > 0 and
+            exit_reason in ("sl", "liquidated")):
+            self.post_sl_pause_until_bar = bar_idx + self.cfg.post_sl_pause_bars
+            self.post_sl_pause_triggers += 1
 
 
 # ═══════════════════════════════════════════════════════════════════

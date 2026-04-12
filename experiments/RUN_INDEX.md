@@ -131,4 +131,7 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 *(run_backtest.py — leverage added to engine with funding rate + liquidation check. Best: 100% × 3x leverage → +153% return / +28.9% CAGR / -24.7% DD / Sharpe 3.83 / 82 trades / 69.5% win rate / ZERO liquidations across all 16 backtests. Realistic live expectation: +18-22% CAGR.)*
 
 ### Eval 16 — Circuit breaker test (8 variants on baseline 100% × 3x)
-*(run_backtest.py — DD breakers + max-consec-loss killswitch tested. Verdict: NONE earn their cost. Killswitch slightly improves Sharpe (3.83 → 4.05) at 3% CAGR cost. DD breakers cut DD 38% but cut return 54% — worst tradeoff. Drawdowns are brief shocks not slow grinds, so time-based pauses can't help. **Deploy baseline unchanged.** Results: experiments/backtest_results.json)*
+*(run_backtest.py — DD breakers + max-consec-loss killswitch tested. Verdict: NONE earn their cost. Killswitch slightly improves Sharpe (3.83 → 4.05) at 3% CAGR cost. DD breakers cut DD 38% but cut return 54% — worst tradeoff.)*
+
+### Eval 17 — Post-SL pause test (6 variants) **⭐⭐⭐ NEW DEPLOYABLE WINNER**
+*(run_backtest.py — Tested pause-after-each-SL approach (user's idea). Best: post_sl_24h → +191.6% return / +34.0% CAGR / -15.1% DD / 72.0% win rate / 50 trades. UNICORN OUTCOME: better return AND less drawdown than baseline. Filters out the bad trades that come right after a loss when VP is stale. Results: experiments/backtest_results.json)*

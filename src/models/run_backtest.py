@@ -45,25 +45,18 @@ FILTER_VARIANTS = {
 
 SIZING_VARIANTS = {
     # All variants use 100% sizing × 3x leverage (deployable winner from Eval 15).
-    # Variations test circuit breaker configs (now time-based reset).
-    # DD breaker pause = 30 days = 720 bars; killswitch pause = 7 days = 168 bars.
-    "baseline":          {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
-    "dd_breaker_15":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "circuit_breaker_dd": 0.15, "circuit_breaker_pause_bars": 720},
-    "dd_breaker_20":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "circuit_breaker_dd": 0.20, "circuit_breaker_pause_bars": 720},
-    "dd_breaker_10":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "circuit_breaker_dd": 0.10, "circuit_breaker_pause_bars": 720},
-    "killswitch_4L":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "max_consec_losses": 4, "killswitch_pause_bars": 168},
-    "killswitch_5L":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "max_consec_losses": 5, "killswitch_pause_bars": 168},
-    "hybrid_15_4L":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "circuit_breaker_dd": 0.15, "circuit_breaker_pause_bars": 720,
-                          "max_consec_losses": 4, "killswitch_pause_bars": 168},
-    "hybrid_10_3L":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                          "circuit_breaker_dd": 0.10, "circuit_breaker_pause_bars": 720,
-                          "max_consec_losses": 3, "killswitch_pause_bars": 168},
+    # Test post-SL pause: pause for N bars after each SL hit, letting market settle.
+    "baseline":         {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
+    "post_sl_12h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                         "post_sl_pause_bars": 12},
+    "post_sl_24h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                         "post_sl_pause_bars": 24},
+    "post_sl_48h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                         "post_sl_pause_bars": 48},
+    "post_sl_72h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                         "post_sl_pause_bars": 72},
+    "post_sl_24h_kill4L": {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                         "post_sl_pause_bars": 24, "max_consec_losses": 4, "killswitch_pause_bars": 168},
 }
 
 
@@ -106,6 +99,7 @@ def run_one_backtest(data, filter_name, sizing_name):
         circuit_breaker_pause_bars=sizing_cfg.get("circuit_breaker_pause_bars", 0),
         max_consec_losses=sizing_cfg.get("max_consec_losses", 0),
         killswitch_pause_bars=sizing_cfg.get("killswitch_pause_bars", 0),
+        post_sl_pause_bars=sizing_cfg.get("post_sl_pause_bars", 0),
     )
 
     # Parse dates from cached array

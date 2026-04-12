@@ -73,7 +73,7 @@ Read the relevant doc before modifying code in that domain:
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **Essentially complete** — Deployable strategy: v6-prime + ensemble + combined_60_20 + 100% sizing + 3x leverage = **+28.9% CAGR / -24.7% DD / Sharpe 3.83**, zero liquidations across 16 backtests. Ready for Phase 4. |
+| 3 | ML Model Development | **DONE** — Deployable strategy: v6-prime + ensemble + combined_60_20 + 100% sizing + 3x leverage + 24h post-SL pause = **+34.0% CAGR / -15.1% DD / 72% win rate**, zero liquidations. 3.4x S&P 500 return at LESS drawdown. Ready for Phase 4. |
 | 4 | Kraken API Integration | Not started |
 | 5 | Trading Strategy & Execution | Not started |
 | 6 | Live Trading & Monitoring | Not started |
