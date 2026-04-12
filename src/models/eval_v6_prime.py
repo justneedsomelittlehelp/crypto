@@ -70,7 +70,12 @@ FOLD_BOUNDARIES = [
     "2023-01-01", "2023-07-01",
     "2024-01-01", "2024-07-01",
     "2025-01-01", "2025-07-01",
+    "2026-01-01", "2026-04-08",
 ]
+
+HOLDOUT_START = pd.Timestamp("2025-07-01")
+
+EMBARGO_BARS = LABEL_MAX_BARS
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -499,14 +504,18 @@ def main():
     print(f"\nStarting walk-forward...")
     total_start = time.time()
 
+    # Embargo: labels look up to LABEL_MAX_BARS ahead, so shrink each
+    # training segment's tail to prevent leakage into the next segment.
+    embargo_td = pd.Timedelta(hours=EMBARGO_BARS)
+
     for i in range(len(FOLD_BOUNDARIES) - 2):
         fold_start = time.time()
         train_end = pd.Timestamp(FOLD_BOUNDARIES[i])
         val_end = pd.Timestamp(FOLD_BOUNDARIES[i + 1])
         test_end = pd.Timestamp(FOLD_BOUNDARIES[i + 2])
 
-        train_mask = dates < train_end
-        val_mask = (dates >= train_end) & (dates < val_end)
+        train_mask = dates < (train_end - embargo_td)
+        val_mask = (dates >= train_end) & (dates < (val_end - embargo_td))
         test_mask = (dates >= val_end) & (dates < test_end)
 
         if train_mask.sum() < 1000 or val_mask.sum() < 100 or test_mask.sum() < 100:

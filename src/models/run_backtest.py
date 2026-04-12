@@ -44,20 +44,14 @@ FILTER_VARIANTS = {
 }
 
 SIZING_VARIANTS = {
-    # Fine-grained sensitivity sweep 21h-30h at 1h intervals.
-    # Goal: see if 24h is a sharp spike or part of a smooth plateau.
-    "baseline":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
-    "post_sl_21h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 21},
-    "post_sl_22h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 22},
-    "post_sl_23h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 23},
+    # LOCKED: 24h post-SL pause is the deployed parameter. No sweep here —
+    # sweeping on the same data we evaluate on is what invalidated prior runs.
     "post_sl_24h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 24},
-    "post_sl_25h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 25},
-    "post_sl_26h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 26},
-    "post_sl_27h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 27},
-    "post_sl_28h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 28},
-    "post_sl_29h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 29},
-    "post_sl_30h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 30},
 }
+
+# Out-of-sample holdout: data the walk-forward never tested on before
+# the embargo fix. Metrics on this slice are the honest verdict.
+HOLDOUT_START = pd.Timestamp("2025-07-01")
 
 
 def load_predictions():
@@ -72,6 +66,19 @@ def load_predictions():
     print(f"  Date range: {data['dates'][0]} → {data['dates'][-1]}")
     print(f"  Close range: ${float(data['close'].min()):,.0f} → ${float(data['close'].max()):,.0f}")
     return data
+
+
+def slice_data(data, start_ts):
+    """Return a dict view of data with rows on or after start_ts."""
+    dates = pd.to_datetime(data["dates"]).values
+    mask = dates >= np.datetime64(start_ts)
+    return {
+        "dates": data["dates"][mask],
+        "close": data["close"][mask],
+        "probs": data["probs"][mask],
+        "tp_pct": data["tp_pct"][mask],
+        "sl_pct": data["sl_pct"][mask],
+    }
 
 
 def run_one_backtest(data, filter_name, sizing_name):
@@ -135,33 +142,39 @@ def main():
     print(f"\nRunning {len(FILTER_VARIANTS)} filters × {len(SIZING_VARIANTS)} sizings = "
           f"{len(FILTER_VARIANTS) * len(SIZING_VARIANTS)} backtests...\n")
 
+    holdout_data = slice_data(data, HOLDOUT_START)
+    print(f"\nHoldout slice: {len(holdout_data['dates'])} bars "
+          f"({holdout_data['dates'][0]} → {holdout_data['dates'][-1]})")
+
     for filter_name in FILTER_VARIANTS:
         for sizing_name in SIZING_VARIANTS:
             label = f"{filter_name} + {sizing_name}"
-            print(f"  Running: {label}...", end=" ", flush=True)
-            try:
-                metrics = run_one_backtest(data, filter_name, sizing_name)
-                all_results.append(metrics)
-                print(f"final=${metrics['final_equity']:,.0f}  "
-                      f"({metrics['total_return_pct']:+.1f}%)  "
-                      f"DD={metrics['max_drawdown_pct']:.1f}%  "
-                      f"Sharpe={metrics['sharpe_annualized']:.2f}  "
-                      f"trades={metrics['n_trades']}")
-            except Exception as e:
-                print(f"FAILED: {e}")
-                import traceback
-                traceback.print_exc()
+            for scope_name, scope_data in [("full", data), ("holdout", holdout_data)]:
+                print(f"  Running: {label} [{scope_name}]...", end=" ", flush=True)
+                try:
+                    metrics = run_one_backtest(scope_data, filter_name, sizing_name)
+                    metrics["scope"] = scope_name
+                    all_results.append(metrics)
+                    print(f"final=${metrics['final_equity']:,.0f}  "
+                          f"({metrics['total_return_pct']:+.1f}%)  "
+                          f"DD={metrics['max_drawdown_pct']:.1f}%  "
+                          f"Sharpe={metrics['sharpe_annualized']:.2f}  "
+                          f"trades={metrics['n_trades']}")
+                except Exception as e:
+                    print(f"FAILED: {e}")
+                    import traceback
+                    traceback.print_exc()
 
     # ─── Comparison table ───
     print(f"\n{'=' * 100}")
     print(f"  COMPARISON TABLE — sorted by total return")
     print(f"{'=' * 100}")
-    print(f"  {'Filter':<18} {'Sizing':<14} {'Final $':>10} {'Return':>9} {'CAGR':>8} {'DD':>8} {'Sharpe':>8} {'Trades':>7} {'Win%':>7}")
-    print(f"  {'-' * 18} {'-' * 14} {'-' * 10} {'-' * 9} {'-' * 8} {'-' * 8} {'-' * 8} {'-' * 7} {'-' * 7}")
-    sorted_results = sorted(all_results, key=lambda r: r["total_return_pct"], reverse=True)
+    print(f"  {'Scope':<8} {'Filter':<18} {'Sizing':<14} {'Final $':>10} {'Return':>9} {'CAGR':>8} {'DD':>8} {'Sharpe':>8} {'Trades':>7} {'Win%':>7}")
+    print(f"  {'-' * 8} {'-' * 18} {'-' * 14} {'-' * 10} {'-' * 9} {'-' * 8} {'-' * 8} {'-' * 8} {'-' * 7} {'-' * 7}")
+    sorted_results = sorted(all_results, key=lambda r: (r.get("scope", ""), -r["total_return_pct"]))
     for r in sorted_results:
         print(
-            f"  {r['filter']:<18} {r['sizing']:<14} "
+            f"  {r.get('scope','full'):<8} {r['filter']:<18} {r['sizing']:<14} "
             f"${r['final_equity']:>9,.0f} "
             f"{r['total_return_pct']:>+8.1f}% "
             f"{r['annualized_return_pct']:>+7.1f}% "
