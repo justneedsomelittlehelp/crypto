@@ -58,6 +58,11 @@ MIN_PEAKS = 1               # Require at least 1 peak (ceiling OR floor)
 TP_REF = 0.075
 SL_REF = 0.03
 
+# Multi-seed + SWA config
+N_SEEDS = 3                 # Number of seeds per fold (3 = good balance of quality/time)
+SWA_START_EPOCH = 15        # Start SWA averaging after this epoch
+SWA_UPDATE_FREQ = 1         # Update SWA every N epochs (1 = every epoch)
+
 FOLD_BOUNDARIES = [
     "2020-01-01", "2020-07-01",
     "2021-01-01", "2021-07-01",
@@ -304,6 +309,10 @@ def train_fold(model, train_loader, val_loader, device, use_amp=False):
     best_state = None
     epochs_no_improve = 0
 
+    # SWA state
+    swa_weights = None
+    swa_count = 0
+
     for epoch in range(1, EPOCHS + 1):
         model.train()
         train_loss_sum = 0.0
@@ -357,6 +366,18 @@ def train_fold(model, train_loader, val_loader, device, use_amp=False):
         if epoch % 5 == 0 or epoch == 1:
             print(f"    Epoch {epoch:3d} | Train {train_acc:.4f} | Val {val_acc:.4f} | Val Loss {val_loss:.4f}")
 
+        # ─── SWA weight averaging (after warmup epoch) ───
+        if epoch >= SWA_START_EPOCH and epoch % SWA_UPDATE_FREQ == 0:
+            current_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            if swa_weights is None:
+                swa_weights = current_state
+                swa_count = 1
+            else:
+                # Running average: swa = (swa * count + current) / (count + 1)
+                for k in swa_weights:
+                    swa_weights[k] = (swa_weights[k] * swa_count + current_state[k]) / (swa_count + 1)
+                swa_count += 1
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
@@ -364,10 +385,15 @@ def train_fold(model, train_loader, val_loader, device, use_amp=False):
         else:
             epochs_no_improve += 1
             if epochs_no_improve >= EARLY_STOP_PATIENCE:
-                print(f"    Early stop at epoch {epoch} (best val_loss at epoch {epoch - epochs_no_improve})")
+                print(f"    Early stop at epoch {epoch} (best val_loss at epoch {epoch - epochs_no_improve}, SWA count={swa_count})")
                 break
 
-    if best_state:
+    # Use SWA weights if available (averaged over last epochs)
+    # Falls back to best_state if SWA never activated (short training)
+    if swa_weights is not None and swa_count >= 2:
+        model.load_state_dict(swa_weights)
+        print(f"    SWA applied: averaged {swa_count} checkpoints")
+    elif best_state:
         model.load_state_dict(best_state)
     model = model.to(device)
     return model, epoch
@@ -429,6 +455,8 @@ def main():
     print(f"  Regularization: dropout={DROPOUT}, weight_decay={WEIGHT_DECAY}, label_smoothing={LABEL_SMOOTHING}")
     print(f"  Optimizer: AdamW, LR={LR}")
     print(f"  Batch: {BATCH_SIZE}")
+    print(f"  Multi-seed: {N_SEEDS} seeds per fold (ensemble by logit averaging)")
+    print(f"  SWA: start at epoch {SWA_START_EPOCH}, update every {SWA_UPDATE_FREQ}")
 
     # ─── Load data ───
     t0 = time.time()
@@ -510,16 +538,42 @@ def main():
 
         print(f"\n  Fold {i + 1} ({FOLD_BOUNDARIES[i + 1]} → {FOLD_BOUNDARIES[i + 2]})")
         print(f"    Train: {len(train_ds)}  Val: {len(val_ds)}  Test: {len(test_ds)}")
+        print(f"    Training {N_SEEDS} seeds with SWA...")
 
-        model = build_v6_prime()
-        if USE_COMPILE and hasattr(torch, "compile"):
-            try:
-                model = torch.compile(model)
-            except Exception:
-                pass
+        # ─── Multi-seed training with SWA ───
+        seed_logits = []   # Collect logits from each seed for ensembling
+        total_epochs_run = 0
 
-        model, epochs_run = train_fold(model, train_loader, val_loader, device, use_amp)
-        preds, fold_labels, fold_logits = evaluate_fold(model, test_loader, device, use_amp)
+        for seed_idx in range(N_SEEDS):
+            seed = 42 + seed_idx  # seeds 42, 43, 44, ...
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+
+            print(f"    [Seed {seed}]")
+            model = build_v6_prime()
+            if USE_COMPILE and hasattr(torch, "compile"):
+                try:
+                    model = torch.compile(model)
+                except Exception:
+                    pass
+
+            model, epochs_run = train_fold(model, train_loader, val_loader, device, use_amp)
+            _, _, seed_fold_logits = evaluate_fold(model, test_loader, device, use_amp)
+            seed_logits.append(seed_fold_logits)
+            total_epochs_run += epochs_run
+
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        # Ensemble: average logits across seeds
+        fold_logits = np.mean(np.stack(seed_logits), axis=0)
+        preds = (fold_logits > 0).astype(np.float32)
+
+        # Get labels from test_ds (same for all seeds)
+        fold_labels = np.array([test_ds.labels[test_ds.valid_indices[j] + test_ds.lookback - 1].item()
+                                for j in range(len(test_ds))])
 
         fold_regimes = np.array([test_ds.get_regime(j) for j in range(len(test_ds))])
         fold_tp_pct = np.array([test_ds.get_tp_pct(j) for j in range(len(test_ds))])
@@ -545,7 +599,8 @@ def main():
             "period": f"{FOLD_BOUNDARIES[i + 1]} → {FOLD_BOUNDARIES[i + 2]}",
             "acc": float(fold_acc),
             "n_test": len(preds),
-            "epochs_run": epochs_run,
+            "n_seeds": N_SEEDS,
+            "total_epochs": total_epochs_run,
             "time_sec": round(fold_time, 1),
             "n_long_trades": int(n_long),
             "long_ev_real": round(float(fold_long_ev), 3),
@@ -559,12 +614,8 @@ def main():
         all_sl_pct.extend(fold_sl_pct.tolist())
         all_logits.extend(fold_logits.tolist())
 
-        print(f"    Acc: {fold_acc:.4f}, epochs={epochs_run}, {fold_time:.0f}s")
+        print(f"    [Ensemble] Acc: {fold_acc:.4f} ({N_SEEDS} seeds, {total_epochs_run} total epochs, {fold_time:.0f}s)")
         print(f"    Long trades: {int(n_long)}, Real EV/trade: {fold_long_ev:+.3f}%")
-
-        del model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
     total_time = time.time() - total_start
 
@@ -666,7 +717,7 @@ def main():
     print(f"\n  Per-fold:")
     print(f"  {'Fold':<6} {'Period':<28} {'Acc':>7} {'Epochs':>7} {'Long#':>7} {'Long EV':>9} {'TP avg':>8} {'SL avg':>8}")
     for fr in fold_results:
-        print(f"  {fr['fold']:<6} {fr['period']:<28} {fr['acc']*100:6.1f}% {fr['epochs_run']:>7} {fr.get('n_long_trades', 0):>7,} {fr.get('long_ev_real', 0):+8.3f}% {fr.get('avg_tp_pct', 0)*100:7.2f}% {fr.get('avg_sl_pct', 0)*100:7.2f}%")
+        print(f"  {fr['fold']:<6} {fr['period']:<28} {fr['acc']*100:6.1f}% {fr.get('total_epochs', 0):>7} {fr.get('n_long_trades', 0):>7,} {fr.get('long_ev_real', 0):+8.3f}% {fr.get('avg_tp_pct', 0)*100:7.2f}% {fr.get('avg_sl_pct', 0)*100:7.2f}%")
 
     if bull_stats:
         print(f"\n  BULL ({bull_stats['n']} bars): Prec={bull_stats['precision']:.4f}  NPV={bull_stats['npv']:.4f}")
@@ -774,6 +825,9 @@ def main():
             "optimizer": "AdamW",
             "lr": LR,
             "batch_size": BATCH_SIZE,
+            "n_seeds": N_SEEDS,
+            "swa_start_epoch": SWA_START_EPOCH,
+            "swa_update_freq": SWA_UPDATE_FREQ,
         },
         "label_stats": label_stats,
         "overall": overall,
