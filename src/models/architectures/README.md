@@ -21,8 +21,23 @@ committed with results, it should never be modified.
 
 | File | Architecture | Best result | Pipeline |
 |------|--------------|-------------|----------|
-| `v2_temporal.py` | Temporal Transformer (VP only) | 61.9% acc, 0/10 folds <50% | v1_raw |
-| `v5_dualbranch_cls.py` | Dual-branch with CLS + volume | 60.5% acc, Strategy 4 +0.71%/day | v2_scaled |
+| `v2_temporal.py` | Temporal Transformer (VP only, 1 spatial + 1 temporal) | 61.9% acc, 0/10 folds <50% | v1_raw |
+| `v5_dualbranch_cls.py` | Dual-branch with CLS + volume (abandoned: candle branch hurt -3%) | 60.5% acc | v2_scaled |
+| `v6_temporal_enriched.py` | Single-path temporal + day enrichment (1 spatial + 1 temporal) | 58.4% acc, **bull long EV +1.57%** | v1_raw |
+| `v7_simple_2plus1.py` | 2 spatial + 1 temporal, no enrichment, mean pool | 56.2% acc — extra spatial layer not worth it | v2_scaled |
+| `v8_enriched_2plus1.py` | 2 spatial + 1 temporal + enrichment + CLS pool | 58.0% acc on 1h, 59.6% on 15min | v1_raw |
+| `v6_prime_vp_labels.py` | ⭐⭐ v6 architecture for VP-derived labels (dropout 0.3 default) | **+3.98% EV/trade with combined filter** (Eval 12) | v1_raw |
+
+## Active vs historical
+
+**Currently used in active eval scripts:**
+- `v6_prime_vp_labels.py` ← `eval_v6_prime.py` (current best)
+- `v6_temporal_enriched.py` ← `eval_15min.py` (reference)
+- `v8_enriched_2plus1.py` ← `eval_15min.py`, `eval_2plus1.py` (reference)
+- `v7_simple_2plus1.py` ← `eval_2plus1.py` (reference)
+
+**Historical only (referenced in archived eval scripts):**
+- `v2_temporal.py`, `v5_dualbranch_cls.py`
 
 ## Naming convention
 
