@@ -153,6 +153,65 @@ Collected raw logits from walk-forward (10 folds, 20,435 test samples) and analy
 
 ---
 
+## v6-prime: VP-derived TP/SL labels + regularization (Eval 10, 2026-04-12)
+
+**Hypothesis:** VP-derived per-sample TP/SL labels should give cleaner training signal than fixed 7.5/3 because labels align directly with what the model predicts (VP barrier proximity). Regularization overhaul should fix the "converges in 1-2 epochs" problem.
+
+**Changes:**
+- Labels: `TP = entry × (1 + vp_ceiling_dist × 0.25 × 0.8 × vol_scale)`, clipped [1%, 15%]
+          `SL = entry × (1 - vp_floor_dist × 0.25 × 0.6 × vol_scale)`, clipped [1%, 15%]
+- Skip bars with num_peaks < 1
+- Dropout 0.15 → 0.3
+- weight_decay 0 → 1e-3 (AdamW)
+- label_smoothing 0 → 0.1
+- Optimizer: Adam → AdamW
+- Architecture: frozen as v6_prime_vp_labels.TemporalEnrichedV6Prime (identical to v6, different file for provenance)
+
+### Eval 10 — v6-prime results
+
+**Overall accuracy: 74.5%** (jumped +13% from v6 baseline 61.4%)
+**Long-only real EV: +0.48% per trade** (below v6 baseline bull long +1.57%)
+
+Per-fold real EV (computed from actual per-sample TP/SL, not fixed ratios):
+
+| Fold | Period | Acc | Long# | Long EV | Avg TP | Avg SL |
+|------|--------|-----|-------|---------|--------|--------|
+| 1 | 2020 H2 | 68.5% | 552 | **+4.24%** | 12.5% | 4.4% |
+| 2 | 2021 H1 | 49.0% | 2013 | -1.47% | 15.0% | 6.7% |
+| 3 | 2021 H2 | 86.1% | 1116 | **+5.19%** | 13.1% | 9.2% |
+| 4 | 2022 H1 | 63.6% | 1797 | **-3.81%** | 8.2% | 8.2% |
+| 5 | 2022 H2 | 74.7% | 1277 | -0.54% | 9.3% | 4.9% |
+| 6 | 2023 H1 | 71.3% | 1358 | -0.49% | 9.3% | 5.0% |
+| 7 | 2023 H2 | 74.5% | 1335 | +1.94% | 7.5% | 2.5% |
+| 8 | 2024 H1 | 79.4% | 1207 | **+3.52%** | 11.4% | 5.0% |
+| 9 | 2024 H2 | 75.3% | 1469 | +1.41% | 9.3% | 8.4% |
+| 10 | 2025 H1 | 86.1% | 1210 | +0.42% | 8.8% | 7.1% |
+
+**Per-regime real EV:**
+
+| Regime | Direction | Trades | EV/trade |
+|--------|-----------|--------|----------|
+| Bull   | Long      | 5,890  | **+1.23%** |
+| Bull   | Short     | 10,063 | -1.05%    |
+| Bear   | Long      | 7,427  | -0.15%    |
+| Bear   | Short     | 4,445  | **+0.90%** |
+
+**Findings:**
+
+1. **Accuracy ≠ profitability for per-sample labels.** The 13% accuracy jump didn't translate to better EV. When TP/SL are similar in magnitude (e.g. fold 4 avg 8.2%/8.2%), accuracy and EV are equivalent. But the asymmetric TP/SL (wide TP, narrow SL) means most "correct" predictions are default-correct on label 0 — not actionable trades.
+
+2. **Regularization fixed convergence.** Epochs run 17-47 (vs early-stopping at 16 in baseline). Dropout 0.3 + weight_decay 1e-3 + label_smoothing 0.1 + AdamW prevents instant overfitting.
+
+3. **Fold 4 (2022 H1, LUNA/Terra crash) catastrophic at -3.81%.** Model over-entered longs during a crash — FGI regime flip was late relative to actual market direction. 1,797 long trades × -3.81% = significant loss period.
+
+4. **Wild per-fold variance.** Fold 1: +4.24%, Fold 4: -3.81%. Seed-level variance and genuinely harder market periods both contribute.
+
+5. **Bull long +1.23% vs v6 baseline +1.57%.** Worse than baseline for the best-performing regime direction. The architecture change to v6-prime labels did not improve the trading outcome.
+
+**Verdict:** Concept directionally works (positive overall EV) but execution is worse than v6 baseline. The per-sample adaptive TP/SL introduces more variance than it removes. Not production-ready.
+
+---
+
 ## 2+1 Spatial-Temporal Experiments (2026-04-10)
 
 Tested adding 1 temporal layer to the 2-layer spatial architecture (Eval 4). Two variants:

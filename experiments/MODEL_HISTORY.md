@@ -209,10 +209,12 @@ RNN (vanishing gradients)
      └→ CNN (fixed filters can't learn bin-pair relationships)
          └→ Spatial Transformer (no temporal context)
              ├→ Dual-Branch v5 (candle branch = noise) ✗
-             ├→ v6 Enriched 1+1 (best EV on 1h) ✓
+             ├→ v6 Enriched 1+1 ✓ (best EV: bull long +1.57%)
              ├→ v7 Simple 2+1 (no enrichment = bad) ✗
-             └→ v8 Enriched 2+1 (needs more data)
-                 └→ v8 on 15min (promising — in progress)
+             ├→ v8 Enriched 2+1 (needs more data)
+             │  └→ v8 on 15min (best acc 59.6%, lower EV) ~
+             └→ v6 + funding fine-tune (Eval 9, fold 6 collapse) ✗
+                 └→ v6-prime VP-derived labels (Eval 10, acc up 13%, EV worse) ✗
 ```
 
 ---
@@ -257,7 +259,47 @@ RNN (vanishing gradients)
 
 ---
 
-## 11. Next Directions (as of 2026-04-12)
+## 11. v6-prime: VP-derived TP/SL + Regularization (Eval 10 — worse than baseline)
+
+**Why built:** Two distinct problems to solve at once:
+1. Fixed 7.5/3 labels don't align with model's actual task (VP barrier prediction).
+2. v6 baseline converges in 1-2 epochs then overfits (weak regularization).
+
+**Changes from v6:**
+- **Per-sample adaptive labels:** TP = `ceiling_dist × 0.25 × 0.8 × vol_scale`, SL = `floor_dist × 0.25 × 0.6 × vol_scale`, clipped [1%, 15%]. Labels aim at VP peaks directly.
+- **Regularization overhaul:** dropout 0.15 → 0.3, weight_decay 0 → 1e-3, label_smoothing 0 → 0.1, Adam → AdamW.
+- Skip bars with 0 peaks in VP structure.
+- Frozen as `v6_prime_vp_labels.TemporalEnrichedV6Prime` (same architecture as v6, separate file for provenance).
+
+**Results (Eval 10):**
+
+| Metric | v6 baseline | v6-prime | Delta |
+|--------|-------------|----------|-------|
+| Overall accuracy | 61.4% | **74.5%** | +13.1% |
+| Long real EV | (fixed 7.5% wins) | **+0.48%** | — |
+| Bull long EV | +1.57% | +1.23% | **-0.34%** |
+| Bear short EV | -0.04% | +0.90% | +0.94% |
+| Epochs per fold | 16 (early stop) | 17-47 | ✓ |
+| Per-fold variance | ~20% range | ~9% range (but EV wild) | Mixed |
+
+**What worked:**
+- Regularization genuinely fixed early stopping. Models train for 17-47 epochs now, not hitting the wasted patience.
+- Bull long precision on VP-derived labels slightly higher (~62% vs baseline).
+- Per-fold accuracy is more consistent (tighter range than baseline).
+
+**What failed:**
+- **Accuracy did not translate to EV.** The 13% accuracy gain is mostly on "easy default" samples (wide TP where label 0 is trivially correct), not on profitable long trades.
+- **Bull long EV dropped (-0.34%)** vs baseline — the best regime direction got worse.
+- **Fold 4 (2022 H1, LUNA crash) catastrophic at -3.81%** — model over-entered longs during a crash with 1,797 trades.
+- **Per-fold real EV variance is huge:** +5.19% on fold 3, -3.81% on fold 4. Not production-ready.
+
+**Root cause:** Per-sample TP/SL introduced variance without reducing it elsewhere. When TP ≈ SL (fold 4: 8.2%/8.2%), the task is hard and mistakes are expensive. When TP >> SL, label 0 is easy but doesn't generate actionable long trades. The label formula encodes a task that's either trivial or brutal — no middle ground.
+
+**Decision:** v6-prime is not the path forward. The concept works directionally (positive overall EV) but execution is worse than v6 baseline for trading purposes. Accuracy became the wrong metric.
+
+---
+
+## 12. Next Directions (as of 2026-04-12)
 
 VP information ceiling is ~60%. Funding rate fine-tuning was tried and abandoned (Eval 9). Next directions:
 

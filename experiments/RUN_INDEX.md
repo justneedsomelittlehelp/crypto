@@ -108,3 +108,6 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 
 ### Eval 9 — v6 baseline + funding rate fine-tune (walk-forward, TP=7.5%/SL=3%)
 *(eval_finetune_funding.py — Colab T4. Mixed results, fold 6 collapse. Abandoned. Results: experiments/eval_finetune_funding_results.json)*
+
+### Eval 10 — v6-prime with VP-derived TP/SL + regularization overhaul (walk-forward)
+*(eval_v6_prime.py — Colab A100. 74.5% acc but +0.48% real EV. Per-fold variance too high. Results: experiments/eval_v6_prime_results.json)*
