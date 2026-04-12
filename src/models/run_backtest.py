@@ -44,19 +44,19 @@ FILTER_VARIANTS = {
 }
 
 SIZING_VARIANTS = {
-    # All variants use 100% sizing × 3x leverage (deployable winner from Eval 15).
-    # Test post-SL pause: pause for N bars after each SL hit, letting market settle.
-    "baseline":         {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
-    "post_sl_12h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                         "post_sl_pause_bars": 12},
-    "post_sl_24h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                         "post_sl_pause_bars": 24},
-    "post_sl_48h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                         "post_sl_pause_bars": 48},
-    "post_sl_72h":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                         "post_sl_pause_bars": 72},
-    "post_sl_24h_kill4L": {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
-                         "post_sl_pause_bars": 24, "max_consec_losses": 4, "killswitch_pause_bars": 168},
+    # Fine-grained sensitivity sweep 21h-30h at 1h intervals.
+    # Goal: see if 24h is a sharp spike or part of a smooth plateau.
+    "baseline":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
+    "post_sl_21h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 21},
+    "post_sl_22h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 22},
+    "post_sl_23h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 23},
+    "post_sl_24h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 24},
+    "post_sl_25h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 25},
+    "post_sl_26h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 26},
+    "post_sl_27h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 27},
+    "post_sl_28h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 28},
+    "post_sl_29h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 29},
+    "post_sl_30h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 30},
 }
 
 

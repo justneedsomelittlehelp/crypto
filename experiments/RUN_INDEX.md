@@ -133,5 +133,8 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 ### Eval 16 — Circuit breaker test (8 variants on baseline 100% × 3x)
 *(run_backtest.py — DD breakers + max-consec-loss killswitch tested. Verdict: NONE earn their cost. Killswitch slightly improves Sharpe (3.83 → 4.05) at 3% CAGR cost. DD breakers cut DD 38% but cut return 54% — worst tradeoff.)*
 
-### Eval 17 — Post-SL pause test (6 variants) **⭐⭐⭐ NEW DEPLOYABLE WINNER**
-*(run_backtest.py — Tested pause-after-each-SL approach (user's idea). Best: post_sl_24h → +191.6% return / +34.0% CAGR / -15.1% DD / 72.0% win rate / 50 trades. UNICORN OUTCOME: better return AND less drawdown than baseline. Filters out the bad trades that come right after a loss when VP is stale. Results: experiments/backtest_results.json)*
+### Eval 17 — Post-SL pause test (6 variants) **⭐⭐⭐ DEPLOYABLE WINNER**
+*(run_backtest.py — Tested pause-after-each-SL approach (user's idea). Best: post_sl_24h → +191.6% return / +34.0% CAGR / -15.1% DD / 72.0% win rate / 50 trades. UNICORN OUTCOME: better return AND less drawdown than baseline. Filters out bad trades that come right after a loss when VP is stale.)*
+
+### Eval 18 — Sensitivity validation of 24h post-SL pause
+*(run_backtest.py — Two sweeps: coarse 14-60h then fine 21-30h at 1h intervals. Confirmed 23-24h is a 2-hour peak (tied at +34% CAGR), part of a 5-hour plateau (22-26h all beat baseline). Not a single-point spike. DD robustly -15.1% across entire 21-30h range. Mechanism is structural, not random. **24h confirmed as deployable.** Results: experiments/backtest_results.json)*

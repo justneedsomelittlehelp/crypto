@@ -20,12 +20,26 @@
         "reserve_pct": 0.0,
         "leverage": 3.0
       },
-      "post_sl_12h": {
+      "post_sl_21h": {
         "sizing_mode": "fixed_pct",
         "position_size_pct": 1.0,
         "reserve_pct": 0.0,
         "leverage": 3.0,
-        "post_sl_pause_bars": 12
+        "post_sl_pause_bars": 21
+      },
+      "post_sl_22h": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.0,
+        "reserve_pct": 0.0,
+        "leverage": 3.0,
+        "post_sl_pause_bars": 22
+      },
+      "post_sl_23h": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.0,
+        "reserve_pct": 0.0,
+        "leverage": 3.0,
+        "post_sl_pause_bars": 23
       },
       "post_sl_24h": {
         "sizing_mode": "fixed_pct",
@@ -34,28 +48,47 @@
         "leverage": 3.0,
         "post_sl_pause_bars": 24
       },
-      "post_sl_48h": {
+      "post_sl_25h": {
         "sizing_mode": "fixed_pct",
         "position_size_pct": 1.0,
         "reserve_pct": 0.0,
         "leverage": 3.0,
-        "post_sl_pause_bars": 48
+        "post_sl_pause_bars": 25
       },
-      "post_sl_72h": {
+      "post_sl_26h": {
         "sizing_mode": "fixed_pct",
         "position_size_pct": 1.0,
         "reserve_pct": 0.0,
         "leverage": 3.0,
-        "post_sl_pause_bars": 72
+        "post_sl_pause_bars": 26
       },
-      "post_sl_24h_kill4L": {
+      "post_sl_27h": {
         "sizing_mode": "fixed_pct",
         "position_size_pct": 1.0,
         "reserve_pct": 0.0,
         "leverage": 3.0,
-        "post_sl_pause_bars": 24,
-        "max_consec_losses": 4,
-        "killswitch_pause_bars": 168
+        "post_sl_pause_bars": 27
+      },
+      "post_sl_28h": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.0,
+        "reserve_pct": 0.0,
+        "leverage": 3.0,
+        "post_sl_pause_bars": 28
+      },
+      "post_sl_29h": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.0,
+        "reserve_pct": 0.0,
+        "leverage": 3.0,
+        "post_sl_pause_bars": 29
+      },
+      "post_sl_30h": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.0,
+        "reserve_pct": 0.0,
+        "leverage": 3.0,
+        "post_sl_pause_bars": 30
       }
     }
   },
@@ -148,36 +181,36 @@
     },
     {
       "starting_capital": 5000.0,
-      "final_equity": 11149.483117758751,
-      "total_return_pct": 122.99,
-      "annualized_return_pct": 24.51,
-      "n_trades": 71,
-      "n_wins": 51,
-      "n_losses": 20,
-      "win_rate": 0.7183,
-      "avg_trade_pct": 11.139,
-      "avg_win_dollars": 225.67,
-      "avg_loss_dollars": -267.98,
-      "avg_win_pct": 18.286,
-      "avg_loss_pct": -7.084,
-      "total_fees": 1542.28,
-      "total_funding": 344.88,
+      "final_equity": 13298.915436402924,
+      "total_return_pct": 165.98,
+      "annualized_return_pct": 30.65,
+      "n_trades": 54,
+      "n_wins": 39,
+      "n_losses": 15,
+      "win_rate": 0.7222,
+      "avg_trade_pct": 11.563,
+      "avg_win_dollars": 337.17,
+      "avg_loss_dollars": -323.38,
+      "avg_win_pct": 18.926,
+      "avg_loss_pct": -7.579,
+      "total_fees": 1667.32,
+      "total_funding": 345.77,
       "first_trade_date": "2021-04-19",
       "last_trade_date": "2024-12-16",
       "span_days": 1336.4,
       "span_years": 3.66,
-      "avg_hold_days": 2.89,
-      "trades_per_year": 19.4,
-      "max_drawdown_pct": -24.74,
-      "max_consec_losses": 8,
-      "sharpe_per_trade": 0.846,
-      "sharpe_annualized": 3.725,
+      "avg_hold_days": 3.33,
+      "trades_per_year": 14.8,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 5,
+      "sharpe_per_trade": 0.829,
+      "sharpe_annualized": 3.187,
       "exit_reasons": {
-        "tp": 48,
-        "sl": 20,
+        "tp": 36,
+        "sl": 15,
         "timeout": 3
       },
-      "skipped_no_capital": 297,
+      "skipped_no_capital": 233,
       "skipped_pyramid": 0,
       "monthly_summary": [
         {
@@ -192,44 +225,216 @@
         },
         {
           "month": "2023-10",
-          "pnl_dollars": 2763.4963262510114,
-          "n_trades": 39
+          "pnl_dollars": 2792.30368866854,
+          "n_trades": 27
         },
         {
           "month": "2023-11",
-          "pnl_dollars": 1219.0460155134424,
-          "n_trades": 15
+          "pnl_dollars": 1731.3148938012494,
+          "n_trades": 11
         },
         {
           "month": "2024-02",
-          "pnl_dollars": 2864.5231650921023,
+          "pnl_dollars": 3027.424439260429,
           "n_trades": 7
         },
         {
           "month": "2024-03",
-          "pnl_dollars": -489.14143736719336,
+          "pnl_dollars": -516.95820085742,
           "n_trades": 1
         },
         {
           "month": "2024-04",
-          "pnl_dollars": -2573.0111149288505,
-          "n_trades": 3
+          "pnl_dollars": -1453.0348509275807,
+          "n_trades": 2
         },
         {
           "month": "2024-12",
-          "pnl_dollars": 1832.6048162147229,
+          "pnl_dollars": 2185.90011947419,
           "n_trades": 3
         }
       ],
       "n_months": 8,
       "filter": "combined_60_20",
-      "sizing": "post_sl_12h",
+      "sizing": "post_sl_21h",
       "engine_summary": {
         "n_signals": 481,
-        "n_trades_executed": 71,
-        "skipped_no_capital": 297,
+        "n_trades_executed": 54,
+        "skipped_no_capital": 233,
         "skipped_pyramid": 0,
-        "skipped_breaker": 113
+        "skipped_breaker": 194
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 13299.106398591517,
+      "total_return_pct": 165.98,
+      "annualized_return_pct": 30.65,
+      "n_trades": 52,
+      "n_wins": 37,
+      "n_losses": 15,
+      "win_rate": 0.7115,
+      "avg_trade_pct": 11.363,
+      "avg_win_dollars": 355.34,
+      "avg_loss_dollars": -323.24,
+      "avg_win_pct": 19.042,
+      "avg_loss_pct": -7.579,
+      "total_fees": 1665.74,
+      "total_funding": 344.53,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 3.36,
+      "trades_per_year": 14.2,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 5,
+      "sharpe_per_trade": 0.803,
+      "sharpe_annualized": 3.027,
+      "exit_reasons": {
+        "tp": 34,
+        "sl": 15,
+        "timeout": 3
+      },
+      "skipped_no_capital": 226,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 2792.7662035254575,
+          "n_trades": 26
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 1730.996769389098,
+          "n_trades": 10
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 3027.467910744965,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -516.9656239792469,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1453.0557153895415,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 2185.931507317271,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_22h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 52,
+        "skipped_no_capital": 226,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 203
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 14602.264822610305,
+      "total_return_pct": 192.05,
+      "annualized_return_pct": 34.03,
+      "n_trades": 48,
+      "n_wins": 34,
+      "n_losses": 14,
+      "win_rate": 0.7083,
+      "avg_trade_pct": 11.325,
+      "avg_win_dollars": 410.65,
+      "avg_loss_dollars": -311.42,
+      "avg_win_pct": 19.116,
+      "avg_loss_pct": -7.597,
+      "total_fees": 1631.05,
+      "total_funding": 462.22,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 3.8,
+      "trades_per_year": 13.1,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 5,
+      "sharpe_per_trade": 0.786,
+      "sharpe_annualized": 2.847,
+      "exit_reasons": {
+        "tp": 30,
+        "sl": 14,
+        "timeout": 4
+      },
+      "skipped_no_capital": 245,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 2789.835022339869,
+          "n_trades": 24
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 2719.2728810511676,
+          "n_trades": 8
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 3324.124708058181,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -567.6222686909571,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1595.4383491790625,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 2400.1274820475946,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_23h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 48,
+        "skipped_no_capital": 245,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 188
       }
     },
     {
@@ -320,198 +525,36 @@
     },
     {
       "starting_capital": 5000.0,
-      "final_equity": 8521.7568635483,
-      "total_return_pct": 70.44,
-      "annualized_return_pct": 15.69,
-      "n_trades": 47,
-      "n_wins": 32,
-      "n_losses": 15,
-      "win_rate": 0.6809,
-      "avg_trade_pct": 11.575,
-      "avg_win_dollars": 229.23,
-      "avg_loss_dollars": -254.23,
-      "avg_win_pct": 20.539,
-      "avg_loss_pct": -7.547,
-      "total_fees": 1127.78,
-      "total_funding": 217.61,
-      "first_trade_date": "2021-04-19",
-      "last_trade_date": "2024-12-16",
-      "span_days": 1336.4,
-      "span_years": 3.66,
-      "avg_hold_days": 3.18,
-      "trades_per_year": 12.8,
-      "max_drawdown_pct": -16.76,
-      "max_consec_losses": 7,
-      "sharpe_per_trade": 0.75,
-      "sharpe_annualized": 2.69,
-      "exit_reasons": {
-        "tp": 29,
-        "sl": 15,
-        "timeout": 3
-      },
-      "skipped_no_capital": 132,
-      "skipped_pyramid": 0,
-      "monthly_summary": [
-        {
-          "month": "2021-04",
-          "pnl_dollars": 530.642069124278,
-          "n_trades": 4
-        },
-        {
-          "month": "2023-10",
-          "pnl_dollars": 1430.8676313269207,
-          "n_trades": 28
-        },
-        {
-          "month": "2023-11",
-          "pnl_dollars": -518.0337811109403,
-          "n_trades": 2
-        },
-        {
-          "month": "2024-02",
-          "pnl_dollars": 1939.9307498055277,
-          "n_trades": 7
-        },
-        {
-          "month": "2024-03",
-          "pnl_dollars": -331.2595013774947,
-          "n_trades": 1
-        },
-        {
-          "month": "2024-04",
-          "pnl_dollars": -931.0841754789126,
-          "n_trades": 2
-        },
-        {
-          "month": "2024-12",
-          "pnl_dollars": 1400.6938712589208,
-          "n_trades": 3
-        }
-      ],
-      "n_months": 7,
-      "filter": "combined_60_20",
-      "sizing": "post_sl_48h",
-      "engine_summary": {
-        "n_signals": 481,
-        "n_trades_executed": 47,
-        "skipped_no_capital": 132,
-        "skipped_pyramid": 0,
-        "skipped_breaker": 302
-      }
-    },
-    {
-      "starting_capital": 5000.0,
-      "final_equity": 7334.336266800152,
-      "total_return_pct": 46.69,
-      "annualized_return_pct": 11.04,
-      "n_trades": 32,
-      "n_wins": 20,
-      "n_losses": 12,
-      "win_rate": 0.625,
-      "avg_trade_pct": 10.47,
-      "avg_win_dollars": 250.85,
-      "avg_loss_dollars": -223.56,
-      "avg_win_pct": 21.423,
-      "avg_loss_pct": -7.787,
-      "total_fees": 704.28,
-      "total_funding": 194.44,
-      "first_trade_date": "2021-04-19",
-      "last_trade_date": "2024-12-16",
-      "span_days": 1336.4,
-      "span_years": 3.66,
-      "avg_hold_days": 4.36,
-      "trades_per_year": 8.7,
-      "max_drawdown_pct": -15.06,
-      "max_consec_losses": 4,
-      "sharpe_per_trade": 0.665,
-      "sharpe_annualized": 1.967,
-      "exit_reasons": {
-        "tp": 17,
-        "sl": 12,
-        "timeout": 3
-      },
-      "skipped_no_capital": 149,
-      "skipped_pyramid": 0,
-      "monthly_summary": [
-        {
-          "month": "2021-04",
-          "pnl_dollars": -1572.5485820500435,
-          "n_trades": 2
-        },
-        {
-          "month": "2023-10",
-          "pnl_dollars": 1348.9774496745624,
-          "n_trades": 11
-        },
-        {
-          "month": "2023-11",
-          "pnl_dollars": 769.2138767277422,
-          "n_trades": 6
-        },
-        {
-          "month": "2024-02",
-          "pnl_dollars": 1669.6210278235017,
-          "n_trades": 7
-        },
-        {
-          "month": "2024-03",
-          "pnl_dollars": -285.10184150730004,
-          "n_trades": 1
-        },
-        {
-          "month": "2024-04",
-          "pnl_dollars": -801.3470162319655,
-          "n_trades": 2
-        },
-        {
-          "month": "2024-12",
-          "pnl_dollars": 1205.5213523636553,
-          "n_trades": 3
-        }
-      ],
-      "n_months": 7,
-      "filter": "combined_60_20",
-      "sizing": "post_sl_72h",
-      "engine_summary": {
-        "n_signals": 481,
-        "n_trades_executed": 32,
-        "skipped_no_capital": 149,
-        "skipped_pyramid": 0,
-        "skipped_breaker": 300
-      }
-    },
-    {
-      "starting_capital": 5000.0,
-      "final_equity": 12305.03990192063,
-      "total_return_pct": 146.1,
-      "annualized_return_pct": 27.91,
+      "final_equity": 12787.534195295117,
+      "total_return_pct": 155.75,
+      "annualized_return_pct": 29.26,
       "n_trades": 48,
-      "n_wins": 35,
-      "n_losses": 13,
-      "win_rate": 0.7292,
-      "avg_trade_pct": 11.474,
-      "avg_win_dollars": 323.33,
-      "avg_loss_dollars": -308.57,
-      "avg_win_pct": 18.644,
-      "avg_loss_pct": -7.831,
-      "total_fees": 1354.05,
-      "total_funding": 310.34,
+      "n_wins": 32,
+      "n_losses": 16,
+      "win_rate": 0.6667,
+      "avg_trade_pct": 10.44,
+      "avg_win_dollars": 365.22,
+      "avg_loss_dollars": -243.72,
+      "avg_win_pct": 19.481,
+      "avg_loss_pct": -7.643,
+      "total_fees": 1335.84,
+      "total_funding": 332.19,
       "first_trade_date": "2021-04-19",
       "last_trade_date": "2024-12-16",
       "span_days": 1336.4,
       "span_years": 3.66,
-      "avg_hold_days": 3.56,
+      "avg_hold_days": 3.49,
       "trades_per_year": 13.1,
       "max_drawdown_pct": -15.06,
-      "max_consec_losses": 4,
-      "sharpe_per_trade": 0.811,
-      "sharpe_annualized": 2.936,
+      "max_consec_losses": 7,
+      "sharpe_per_trade": 0.701,
+      "sharpe_annualized": 2.538,
       "exit_reasons": {
-        "tp": 32,
-        "sl": 13,
+        "tp": 29,
+        "sl": 16,
         "timeout": 3
       },
-      "skipped_no_capital": 200,
+      "skipped_no_capital": 205,
       "skipped_pyramid": 0,
       "monthly_summary": [
         {
@@ -526,44 +569,474 @@
         },
         {
           "month": "2023-10",
-          "pnl_dollars": 2779.47201189057,
+          "pnl_dollars": 1443.6674319683534,
           "n_trades": 26
         },
         {
           "month": "2023-11",
-          "pnl_dollars": 992.6568043490688,
+          "pnl_dollars": 2693.2852592489976,
           "n_trades": 6
         },
         {
           "month": "2024-02",
-          "pnl_dollars": 2801.1741786986904,
+          "pnl_dollars": 2911.0113321531153,
           "n_trades": 7
         },
         {
           "month": "2024-03",
-          "pnl_dollars": -478.32406481533525,
+          "pnl_dollars": -497.0796831226813,
           "n_trades": 1
         },
         {
           "month": "2024-04",
-          "pnl_dollars": -1344.4443575153114,
+          "pnl_dollars": -1397.1615153165967,
           "n_trades": 2
         },
         {
           "month": "2024-12",
-          "pnl_dollars": 2022.5399823294322,
+          "pnl_dollars": 2101.846023380414,
           "n_trades": 3
         }
       ],
       "n_months": 8,
       "filter": "combined_60_20",
-      "sizing": "post_sl_24h_kill4L",
+      "sizing": "post_sl_25h",
       "engine_summary": {
         "n_signals": 481,
         "n_trades_executed": 48,
-        "skipped_no_capital": 200,
+        "skipped_no_capital": 205,
         "skipped_pyramid": 0,
-        "skipped_breaker": 233
+        "skipped_breaker": 228
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 13246.465548747647,
+      "total_return_pct": 164.93,
+      "annualized_return_pct": 30.51,
+      "n_trades": 52,
+      "n_wins": 36,
+      "n_losses": 16,
+      "win_rate": 0.6923,
+      "avg_trade_pct": 11.134,
+      "avg_win_dollars": 336.23,
+      "avg_loss_dollars": -241.11,
+      "avg_win_pct": 19.429,
+      "avg_loss_pct": -7.531,
+      "total_fees": 1367.9,
+      "total_funding": 339.49,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 3.47,
+      "trades_per_year": 14.2,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 7,
+      "sharpe_per_trade": 0.765,
+      "sharpe_annualized": 2.883,
+      "exit_reasons": {
+        "tp": 33,
+        "sl": 16,
+        "timeout": 3
+      },
+      "skipped_no_capital": 194,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 1554.3017628561736,
+          "n_trades": 25
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 2929.658379049031,
+          "n_trades": 11
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 3015.4845128443703,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -514.9193579392054,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1447.3041945402388,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 2177.2790994940005,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_26h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 52,
+        "skipped_no_capital": 194,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 235
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 11160.191592803314,
+      "total_return_pct": 123.2,
+      "annualized_return_pct": 24.54,
+      "n_trades": 58,
+      "n_wins": 43,
+      "n_losses": 15,
+      "win_rate": 0.7414,
+      "avg_trade_pct": 11.722,
+      "avg_win_dollars": 225.35,
+      "avg_loss_dollars": -235.31,
+      "avg_win_pct": 18.434,
+      "avg_loss_pct": -7.517,
+      "total_fees": 1153.15,
+      "total_funding": 306.86,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 4.2,
+      "trades_per_year": 15.9,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 6,
+      "sharpe_per_trade": 0.868,
+      "sharpe_annualized": 3.456,
+      "exit_reasons": {
+        "tp": 40,
+        "sl": 15,
+        "timeout": 3
+      },
+      "skipped_no_capital": 206,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 1572.3276191846257,
+          "n_trades": 24
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 1334.1578057668883,
+          "n_trades": 18
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 2540.5558021970637,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -433.82128374524024,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1219.3586315305074,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 1834.3649339469725,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_27h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 58,
+        "skipped_no_capital": 206,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 217
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 11171.781092009476,
+      "total_return_pct": 123.44,
+      "annualized_return_pct": 24.57,
+      "n_trades": 54,
+      "n_wins": 40,
+      "n_losses": 14,
+      "win_rate": 0.7407,
+      "avg_trade_pct": 11.791,
+      "avg_win_dollars": 242.4,
+      "avg_loss_dollars": -251.72,
+      "avg_win_pct": 18.537,
+      "avg_loss_pct": -7.482,
+      "total_fees": 1155.62,
+      "total_funding": 306.54,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 4.35,
+      "trades_per_year": 14.8,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 5,
+      "sharpe_per_trade": 0.868,
+      "sharpe_annualized": 3.335,
+      "exit_reasons": {
+        "tp": 37,
+        "sl": 14,
+        "timeout": 3
+      },
+      "skipped_no_capital": 204,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 1596.2966832221884,
+          "n_trades": 21
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 1318.9518008317912,
+          "n_trades": 17
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 2543.194087499599,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -434.2717931636289,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1220.6248961617764,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 1836.269862797791,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_28h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 54,
+        "skipped_no_capital": 204,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 223
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 12124.374275137765,
+      "total_return_pct": 142.49,
+      "annualized_return_pct": 27.39,
+      "n_trades": 52,
+      "n_wins": 36,
+      "n_losses": 16,
+      "win_rate": 0.6923,
+      "avg_trade_pct": 10.744,
+      "avg_win_dollars": 300.86,
+      "avg_loss_dollars": -231.66,
+      "avg_win_pct": 18.918,
+      "avg_loss_pct": -7.645,
+      "total_fees": 1298.04,
+      "total_funding": 317.38,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 3.41,
+      "trades_per_year": 14.2,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 8,
+      "sharpe_per_trade": 0.75,
+      "sharpe_annualized": 2.827,
+      "exit_reasons": {
+        "tp": 33,
+        "sl": 16,
+        "timeout": 3
+      },
+      "skipped_no_capital": 199,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 1533.0884289126782,
+          "n_trades": 29
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 2102.435385064179,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 2760.04664942968,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -471.30119307627626,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1324.7048942985139,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 1992.8445521225037,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_29h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 52,
+        "skipped_no_capital": 199,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 230
+      }
+    },
+    {
+      "starting_capital": 5000.0,
+      "final_equity": 10827.56947294592,
+      "total_return_pct": 116.55,
+      "annualized_return_pct": 23.51,
+      "n_trades": 57,
+      "n_wins": 40,
+      "n_losses": 17,
+      "win_rate": 0.7018,
+      "avg_trade_pct": 10.547,
+      "avg_win_dollars": 234.36,
+      "avg_loss_dollars": -208.63,
+      "avg_win_pct": 18.259,
+      "avg_loss_pct": -7.598,
+      "total_fees": 1141.05,
+      "total_funding": 298.92,
+      "first_trade_date": "2021-04-19",
+      "last_trade_date": "2024-12-16",
+      "span_days": 1336.4,
+      "span_years": 3.66,
+      "avg_hold_days": 3.91,
+      "trades_per_year": 15.6,
+      "max_drawdown_pct": -15.06,
+      "max_consec_losses": 6,
+      "sharpe_per_trade": 0.762,
+      "sharpe_annualized": 3.007,
+      "exit_reasons": {
+        "tp": 37,
+        "sl": 17,
+        "timeout": 3
+      },
+      "skipped_no_capital": 212,
+      "skipped_pyramid": 0,
+      "monthly_summary": [
+        {
+          "month": "2021-04",
+          "pnl_dollars": -1204.068090786656,
+          "n_trades": 2
+        },
+        {
+          "month": "2021-05",
+          "pnl_dollars": 1736.0334377701718,
+          "n_trades": 1
+        },
+        {
+          "month": "2023-10",
+          "pnl_dollars": 1546.437887898768,
+          "n_trades": 27
+        },
+        {
+          "month": "2023-11",
+          "pnl_dollars": 1108.5450999545017,
+          "n_trades": 14
+        },
+        {
+          "month": "2024-02",
+          "pnl_dollars": 2464.8362189340187,
+          "n_trades": 7
+        },
+        {
+          "month": "2024-03",
+          "pnl_dollars": -420.8915276708328,
+          "n_trades": 1
+        },
+        {
+          "month": "2024-04",
+          "pnl_dollars": -1183.0164550084096,
+          "n_trades": 2
+        },
+        {
+          "month": "2024-12",
+          "pnl_dollars": 1779.6929018543537,
+          "n_trades": 3
+        }
+      ],
+      "n_months": 8,
+      "filter": "combined_60_20",
+      "sizing": "post_sl_30h",
+      "engine_summary": {
+        "n_signals": 481,
+        "n_trades_executed": 57,
+        "skipped_no_capital": 212,
+        "skipped_pyramid": 0,
+        "skipped_breaker": 212
       }
     }
   ]
