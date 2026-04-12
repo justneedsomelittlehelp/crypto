@@ -59,7 +59,13 @@ NUM_WORKERS = 4
 USE_COMPILE = True
 
 # Regression-specific
-HUBER_DELTA = 0.02              # transition between L2 and L1 in Huber loss
+# Huber delta: must be larger than typical label magnitude or the loss
+# acts as L1 over the entire dataset, and L1's optimum is the conditional
+# median (slightly negative here since SL hits outnumber TP hits 60/40),
+# which collapses the model to a constant predictor.
+# Median |label| is ~0.05-0.075, so delta=0.10 keeps L2 behavior over the
+# typical range and only clips the rare ±0.15 cap hits.
+HUBER_DELTA = 0.10
 PRECISION_AT_THRESHOLD = 0.015  # 1.5% — for "precision @ threshold" metric
 
 # VP-derived label parameters (UNCHANGED from v6-prime — Stage 1 isolates labels only)
