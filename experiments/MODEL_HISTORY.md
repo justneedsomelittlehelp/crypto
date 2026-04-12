@@ -607,7 +607,64 @@ Files:
 
 ---
 
-## 17. Next Directions (as of 2026-04-12)
+## 17. Circuit Breaker Test (Eval 16, 2026-04-12) — DD Breakers Don't Help
+
+**Hypothesis:** Add drawdown circuit breaker and max-consec-loss killswitch to reduce -24.7% baseline drawdown without sacrificing return.
+
+### Setup
+
+8 variants on the proven config (combined_60_20 + 100% × 3x leverage):
+- baseline (no breakers)
+- dd_breaker_10/15/20 (time-based pause when dd exceeds threshold)
+- killswitch_4L/5L (pause after N consec losses)
+- hybrid combinations
+
+DD breaker pause = 30 days (720 bars at 1h). Killswitch pause = 7 days (168 bars).
+
+### Results
+
+| Variant | CAGR | DD | Sharpe | Verdict |
+|---|---|---|---|---|
+| **baseline** | **+28.9%** | -24.7% | 3.83 | Best return |
+| killswitch_4L/5L | +25.8% | -24.7% | **4.05** | Marginal Sharpe gain at 3% CAGR cost |
+| dd_breaker_20 | +17.7% | -24.7% | 3.69 | Doesn't fire effectively |
+| dd_breaker_15/10 | +13.3% | -15.1% | 3.73 | Cuts DD 38% but cuts return 54% |
+| hybrid_10_3L | +10.0% | -15.1% | 2.63 | Worst risk-adjusted |
+| hybrid_15_4L | +10.0% | -15.1% | 2.49 | Worst risk-adjusted |
+
+### Why breakers fail
+
+1. **Drawdowns are brief shocks, not slow grinds.** The -24.7% max DD likely happens in 1-2 sharp events (LUNA crash 2022 H1). By the time a breaker triggers (at -10% or -15%), the worst is already done.
+2. **Pausing means missing recovery rallies.** Many of the best signals fire during turbulent periods.
+3. **Win rate is already 69%.** Filtering out trades that mostly would have won has clear cost.
+4. **DD breakers HURT Sharpe** (3.83 → 3.73). Sharpe is best with no breaker.
+5. **Killswitch slightly improves Sharpe** (3.83 → 4.05) but at 3% CAGR cost — not worth the trade.
+
+### Engineering note (bug fixed during this experiment)
+
+First DD breaker implementation deadlocked: equity-based reset couldn't trigger because no trades were happening to recover equity. Fixed by switching to time-based pause that resets `peak_equity` when the pause expires, giving the strategy a fresh baseline. Also fixed an immediate-re-fire bug where `update_equity` would re-trigger the breaker on the same bar the pause expired.
+
+### Critical insight
+
+**Max drawdown is concentrated in irreversible early moments.** Time-based pauses can't help because they activate AFTER the worst is already done. If we wanted to cut drawdown further, we'd need to:
+- Predict drawdown periods in advance (not feasible)
+- Use a regime detector to skip trading during certain market conditions (untested)
+- Accept higher friction strategies (lower CAGR)
+
+For now, the -24.7% drawdown is the cost of admission. User's stated tolerance is -30%, so it fits.
+
+### Final decision: deploy the baseline
+
+**No circuit breakers.** The deployable strategy is unchanged from Eval 15:
+- v6-prime + 3-seed ensemble + SWA
+- combined_60_20 filter
+- 100% sizing, no reserve
+- 3x leverage
+- +28.9% CAGR, -24.7% max DD, Sharpe 3.83
+
+---
+
+## 18. Next Directions (as of 2026-04-12)
 
 **⭐⭐ DEPLOYABLE STRATEGY (2026-04-12, Eval 15): v6-prime + ensemble + combined_60_20 filter + 100% sizing + 3x leverage → +28.9% CAGR, -24.7% max DD, Sharpe 3.83, 69.5% win rate, 82 trades over 3.66 years, ZERO liquidations. Beats S&P 500 3x return at comparable drawdown. Realistic live expectation: +18-22% CAGR.**
 
