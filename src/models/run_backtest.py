@@ -35,42 +35,41 @@ RESULTS_PATH = EXPERIMENTS_DIR / "backtest_results.json"
 # Filter and sizing variants to test
 # ═══════════════════════════════════════════════════════════════════
 FILTER_VARIANTS = {
-    # Strict (winners from previous backtest)
-    "combined_65_15": {
-        "min_confidence": 0.65,
-        "min_asymmetry": 1.5,
-        "allow_pyramiding": True,
-    },
+    # Locked to the proven winner: combined_60_20
     "combined_60_20": {
         "min_confidence": 0.60,
         "min_asymmetry": 2.0,
         "allow_pyramiding": True,
     },
-    # Looser variants (testing more signal capture)
-    "combined_60_15": {
-        "min_confidence": 0.60,
-        "min_asymmetry": 1.5,
-        "allow_pyramiding": True,
-    },
-    "combined_55_15": {
-        "min_confidence": 0.55,
-        "min_asymmetry": 1.5,
-        "allow_pyramiding": True,
-    },
-    "combined_55_10": {
-        "min_confidence": 0.55,
-        "min_asymmetry": 1.0,
-        "allow_pyramiding": True,
-    },
-    "combined_50_10": {
-        "min_confidence": 0.50,
-        "min_asymmetry": 1.0,
-        "allow_pyramiding": True,
-    },
 }
 
 SIZING_VARIANTS = {
-    # New: 10% per trade, no reserve, max 10 concurrent
+    # Position size sweep with no reserve, finding optimum capital utilization
+    "fixed_100pct_no_reserve": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.00,
+        "reserve_pct": 0.0,
+    },
+    "fixed_50pct_no_reserve": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 0.50,
+        "reserve_pct": 0.0,
+    },
+    "fixed_33pct_no_reserve": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 0.33,
+        "reserve_pct": 0.0,
+    },
+    "fixed_25pct_no_reserve": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 0.25,
+        "reserve_pct": 0.0,
+    },
+    "fixed_20pct_no_reserve": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 0.20,
+        "reserve_pct": 0.0,
+    },
     "fixed_10pct_no_reserve": {
         "sizing_mode": "fixed_pct",
         "position_size_pct": 0.10,
