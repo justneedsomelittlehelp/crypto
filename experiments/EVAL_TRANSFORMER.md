@@ -212,7 +212,109 @@ Per-fold real EV (computed from actual per-sample TP/SL, not fixed ratios):
 
 ---
 
-## Eval 13 — Realistic Backtest (2026-04-12)
+## Eval 15 — Leverage Sweep ⭐⭐ DEPLOYABLE STRATEGY (2026-04-12)
+
+Added leverage support to backtest engine. Tested 4 sizings × 4 leverages = 16 backtests on combined_60_20 filter.
+
+### Engine additions
+- `BacktestConfig.leverage` (default 1.0)
+- `BacktestConfig.funding_rate_per_8h` (default 0.0001)
+- `BacktestConfig.liquidation_threshold` (default 0.95)
+- Position tracks `size_dollars` (margin) and `exposure_dollars` separately
+- Liquidation check before SL/TP check
+- Funding cost = exposure × funding_rate × hours/8
+
+### Top 8 results
+
+| Sizing × Lev | Final $ | Return | CAGR | Max DD | Sharpe | Trades | Win % |
+|---|---|---|---|---|---|---|---|
+| 100% × 5x | $18,170 | +263% | +42.3% | -39.4% | 3.80 | 85 | 68.2% |
+| 50% × 5x | $17,390 | +248% | +40.6% | -39.3% | 3.50 | 101 | 65.3% |
+| 33% × 5x | $15,972 | +219% | +37.4% | -38.7% | 3.62 | 113 | 64.6% |
+| 25% × 5x | $14,148 | +183% | +32.9% | -37.7% | 3.60 | 117 | 65.0% |
+| **100% × 3x** ⭐ | $12,672 | **+153%** | **+28.9%** | -24.7% | **3.83** | 82 | **69.5%** |
+| 50% × 3x | $12,134 | +143% | +27.4% | -24.9% | 3.38 | 98 | 65.3% |
+| 33% × 3x | $11,313 | +126% | +25.0% | -24.6% | 3.56 | 110 | 64.5% |
+| 25% × 3x | $10,217 | +104% | +21.6% | -23.9% | 3.52 | 115 | 64.3% |
+
+### Major findings
+
+**1. ZERO liquidations across all 16 backtests** including 5x leverage. Tight SL (2.62% × 5x = -13% per trade) keeps us nowhere near the 95% margin loss threshold.
+
+**2. The deployable winner: 100% × 3x leverage**
+- +28.9% CAGR (3x S&P 500)
+- -24.7% max DD (similar to S&P worst periods)
+- Sharpe 3.83 (highest of all 16)
+- 69.5% win rate (highest of all 16)
+- 82 trades over 3.66 years
+
+**3. Drawdown scales linearly with leverage**: 1x=-8.6%, 2x=-16.9%, 3x=-24.7%, 5x=-39.4%
+
+**4. Leverage flywheel**: more leverage = MORE trades (65 → 85 from 1x to 5x). Leveraged wins free more cash → more capital for next signals.
+
+**5. Concentration > diversification at every leverage level.** 100% sizing wins at every tier.
+
+**6. Win rate INCREASES with leverage** (61-66% at 1x → 64-69% at 5x).
+
+### Honest comparison
+
+| | Our bot @ 3x | BTC HODL | S&P 500 |
+|---|---|---|---|
+| CAGR | **+28.9%** | ~+15% | ~+10% |
+| Max DD | -24.7% | -70% | -25% |
+| Sharpe | **3.83** | ~0.5 | ~0.6 |
+
+### Caveats
+- Backtest ≠ live (expect 70-80% of result → realistic +20-22% CAGR)
+- 5 years is one sample path
+- Funding rate approximated at 0.01%/8h fixed
+- Slippage approximated at 0.05%/side
+
+**This is the deployable benchmark for Phase 4 (Kraken integration).**
+
+---
+
+## Eval 14b — Sizing Sweep, No Reserve (2026-04-12)
+
+Locked filter to combined_60_20, swept 6 sizings (100% → 10%) with no reserve.
+
+| Sizing | Return | CAGR | DD | Sharpe |
+|---|---|---|---|---|
+| **100%** | +41.7% | +10.0% | -9.3% | 2.44 |
+| 50% | +38.5% | +9.3% | -9.4% | 2.47 |
+| 33% | +34.7% | +8.5% | -9.3% | 2.63 |
+| 25% | +28.5% | +7.1% | -9.0% | 2.73 |
+| 20% | +26.7% | +6.7% | -8.1% | 2.76 |
+| 10% | +22.7% | +5.8% | -7.4% | 2.74 |
+
+**Findings:**
+- Removing reserve added 13% to return vs Eval 13
+- First time CAGR beat S&P 500 (10.0%)
+- Monotonic: bigger sizing = more return (frequency hypothesis dead)
+- Sharpe peaks at 20% sizing (smoother curve)
+
+---
+
+## Eval 14 — Filter Sweep with 10% Sizing (2026-04-12)
+
+Tested 6 filter strengths with fixed 10% sizing.
+
+| Filter | Return | CAGR | DD | Sharpe | Trades | Win % |
+|---|---|---|---|---|---|---|
+| combined_60_20 | +22.7% | +5.8% | -7.4% | 2.74 | 143 | 60.1% |
+| combined_60_15 | +19.3% | +4.9% | -9.7% | 1.82 | 161 | 56.5% |
+| combined_65_15 | +13.8% | +4.6% | -11.1% | 2.68 | 123 | 62.6% |
+| combined_50_10 | -8.0% | -1.8% | -59.8% | -0.28 | 982 | **28.9%** |
+| combined_55_15 | -18.2% | -4.5% | -34.6% | -1.20 | 390 | 29.0% |
+| combined_55_10 | **-30.6%** | -7.7% | -49.2% | -1.58 | 440 | 28.9% |
+
+**Critical finding: looser filters CRASH.** Win rates collapse to ~29% on filters below conf 0.60. **The model has no edge below 60% confidence.** Predictions in that range are essentially noise. The "more signals" hypothesis is officially dead.
+
+10% sizing also captured 3x more trades (143 vs 49) but CAGR dropped (5.8% vs 7.1%) — smaller positions don't compound as much.
+
+---
+
+## Eval 13 — First realistic backtest (2026-04-12)
 
 First sequential portfolio simulation of v6-prime predictions with capital constraints, fees, slippage, and pyramiding rules. Tested 12 combinations: 3 filters × 4 sizing strategies.
 

@@ -162,16 +162,41 @@ For production trading (not yet implemented — Phase 4-5):
 
 ## Backtesting
 
-**Current best backtest result (Eval 13, 2026-04-12):**
-- Filter: `combined_60_20` (conf > 0.60 + asym > 2.0)
-- Sizing: `fixed_100pct` (one position at a time)
-- **+28.5% total return over 3.66 years**, **+7.1% CAGR**, **-6.5% max DD**, **Sharpe 1.83**
-- 49 trades executed of 481 signals fired (432 skipped for capital lockup)
-- 57.1% win rate, avg hold 2.7 days
+### ⭐⭐ Current best (Eval 15, 2026-04-12) — DEPLOYABLE STRATEGY
 
-Compared to passive: half the return of HODL but 1/10 the drawdown and 3x Sharpe. Profitable but not yet good enough to displace S&P 500 allocation (~10% CAGR with -25% DD).
+**Configuration:** v6-prime + 3-seed ensemble + SWA + combined_60_20 filter + 100% sizing (no reserve) + **3x leverage**
 
-Next iteration: pyramiding + looser filter + short-side trading should roughly double the trade count and CAGR.
+| Metric | Value |
+|---|---|
+| Total return (3.66 years) | **+153%** |
+| CAGR | **+28.9%** |
+| Max drawdown | -24.7% |
+| Sharpe (annualized) | **3.83** |
+| Win rate | 69.5% |
+| Trades | 82 (~22/year) |
+| Avg hold | ~3 days |
+| Liquidations | **0** |
+
+**Comparison:**
+
+| Metric | Our bot @ 3x | BTC HODL | S&P 500 |
+|---|---|---|---|
+| CAGR | +28.9% | ~+15% | ~+10% |
+| Max DD | -24.7% | -70% | -25% |
+| Sharpe | 3.83 | ~0.5 | ~0.6 |
+
+**Realistic live expectation: +18-22% CAGR with -25% to -35% drawdowns** (after accounting for backtest decay, real funding rate variability, slippage spikes).
+
+Higher leverage (5x) tested at +263% return / -39% DD. Mathematically tradeable (no liquidations) but psychologically harder. 3x is the recommended deploy point.
+
+### Key findings from leverage sweep
+- **Zero liquidations across all 16 sizing × leverage combos.** Tight SL protects from forced liquidation even at 5x.
+- **Drawdown scales linearly with leverage** (1x: -8.6%, 2x: -16.9%, 3x: -24.7%, 5x: -39.4%).
+- **Leverage increases trade count** (65 → 85 from 1x → 5x). Wins free more capital → more signals captured.
+- **Concentration > diversification at every leverage level.** 100% sizing wins at every tier.
+
+### Engine details
+`src/backtest/engine.py` provides realistic portfolio simulation:
 
 `src/backtest/engine.py` provides realistic portfolio simulation:
 - Portfolio class with cash, open positions, equity history

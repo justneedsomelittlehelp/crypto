@@ -73,7 +73,7 @@ Read the relevant doc before modifying code in that domain:
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **In progress** (v6 enriched best EV: bull long +1.57%. 2+1 tested, ruled out. Next: tighter TP/SL) |
+| 3 | ML Model Development | **Essentially complete** — Deployable strategy: v6-prime + ensemble + combined_60_20 + 100% sizing + 3x leverage = **+28.9% CAGR / -24.7% DD / Sharpe 3.83**, zero liquidations across 16 backtests. Ready for Phase 4. |
 | 4 | Kraken API Integration | Not started |
 | 5 | Trading Strategy & Execution | Not started |
 | 6 | Live Trading & Monitoring | Not started |

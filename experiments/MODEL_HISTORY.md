@@ -490,9 +490,128 @@ Files:
 
 ---
 
-## 15. Next Directions (as of 2026-04-12)
+## 15. Sizing Sweep (Eval 14b, 2026-04-12)
 
-**⭐⭐ NEW BEST (2026-04-12): v6-prime + 3-seed ensemble + SWA + combined filter (conf>0.65 AND asym>1.5) → +3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97, max 23 consecutive losses. See Eval 12.**
+After Eval 14 (10% sizing flat) underperformed Eval 13 (100% sizing), tested 6 sizings (10% → 100%) on combined_60_20 with **no reserve buffer**.
+
+### Results
+
+| Sizing | Trades | Return | CAGR | DD | Sharpe |
+|--------|--------|--------|------|----|----|
+| **100%** | 60 | **+41.7%** | **+10.0%** | -9.3% | 2.44 |
+| 50% | 81 | +38.5% | +9.3% | -9.4% | 2.47 |
+| 33% | 94 | +34.7% | +8.5% | -9.3% | 2.63 |
+| 25% | 98 | +28.5% | +7.1% | -9.0% | 2.73 |
+| 20% | 109 | +26.7% | +6.7% | -8.1% | 2.76 |
+| 10% | 143 | +22.7% | +5.8% | -7.4% | 2.74 |
+
+### Findings
+
+1. **Removing the reserve added 13% to total return** vs Eval 13 (which had 30% reserve). The reserve was leaving 30% of capital idle.
+2. **First time CAGR beat S&P 500** (10.0% vs ~10%). Real psychological milestone.
+3. **Monotonic: bigger sizing = more return.** "More frequency" hypothesis officially dead. Each step down loses real return because position size matters more than trade count.
+4. **Sharpe peaks at 20% sizing** (2.76). Smaller sizing = smoother equity curve. This matters for leverage — smoother curves leverage better.
+5. **Drawdowns barely change** with sizing (-7% to -9%). Risk dominated by filter quality, not position size.
+
+### The pattern
+The strategy is bottlenecked by signal frequency, not capital. Splitting capital across many small positions doesn't catch more signals — it just lets you take more signals when many fire close together. Most of the time, only 1-2 signals are firing per week, so a single 100% position captures most of the available edge.
+
+---
+
+## 16. Leverage Sweep (Eval 15, 2026-04-12) ⭐⭐ DEPLOYABLE STRATEGY
+
+**Hypothesis:** With 100% sizing winning at 1x and Sharpe 2.44, leveraging up should multiply returns linearly while keeping drawdowns tradeable. Test 4 sizings × 4 leverages = 16 backtests.
+
+### Setup additions
+
+- Engine now tracks `size_dollars` (margin) and `exposure_dollars` (margin × leverage) separately
+- `btc_amount` controls the leveraged exposure → P&L is leveraged
+- Added liquidation check (force-close at 95% margin loss)
+- Added funding rate cost (0.01%/8h × exposure × hours/8)
+- Smoke test verified 3x leverage gives 3x return + 3x DD on synthetic data
+
+### Results — top 8
+
+| Sizing × Lev | Final $ | Return | CAGR | Max DD | Sharpe | Trades | Win % |
+|---|---|---|---|---|---|---|---|
+| 100% × 5x | $18,170 | +263% | +42.3% | -39.4% | 3.80 | 85 | 68.2% |
+| 50% × 5x | $17,390 | +248% | +40.6% | -39.3% | 3.50 | 101 | 65.3% |
+| 33% × 5x | $15,972 | +219% | +37.4% | -38.7% | 3.62 | 113 | 64.6% |
+| 25% × 5x | $14,148 | +183% | +32.9% | -37.7% | 3.60 | 117 | 65.0% |
+| **100% × 3x** ⭐ | **$12,672** | **+153%** | **+28.9%** | **-24.7%** | **3.83** | 82 | **69.5%** |
+| 50% × 3x | $12,134 | +143% | +27.4% | -24.9% | 3.38 | 98 | 65.3% |
+| 33% × 3x | $11,313 | +126% | +25.0% | -24.6% | 3.56 | 110 | 64.5% |
+| 25% × 3x | $10,217 | +104% | +21.6% | -23.9% | 3.52 | 115 | 64.3% |
+
+### Major findings
+
+**1. ZERO liquidations across ALL 16 backtests.** Even at 5x leverage, the strategy never got liquidated. Our SL is tight (2.62% avg loss × 5x = -13% per trade), nowhere near 95% margin loss. **The asymmetry filter that makes the model profitable also keeps it safe at high leverage.**
+
+**2. The deployable winner: 100% × 3x leverage**
+- **+28.9% CAGR** (3x S&P 500)
+- **-24.7% max DD** (similar to S&P worst periods)
+- **Sharpe 3.83** (highest of all 16, hedge-fund tier)
+- **69.5% win rate** (highest of all 16)
+- 82 trades over 3.66 years (~22/year)
+- No liquidations
+
+**3. Drawdown scales linearly with leverage:**
+- 1x: -8.6%
+- 2x: -16.9% (~2x)
+- 3x: -24.7% (~3x)
+- 5x: -39.4% (~4.6x — sublinear due to recovery dynamics)
+
+**4. The leverage flywheel.** Higher leverage = MORE trades, not fewer:
+- 100% × 1x: 65 trades
+- 100% × 3x: 82 trades
+- 100% × 5x: 85 trades
+
+Leveraged wins free more cash → more capital → more signals captured. Compounds qualitatively, not just quantitatively.
+
+**5. Concentration > diversification at every leverage level.** 100% sizing > 50% > 33% > 25% always. Same lesson as Eval 14b.
+
+**6. Win rate INCREASES with leverage** (61-66% at 1x → 64-69% at 5x). Same flywheel effect.
+
+### Honest comparison
+
+| Metric | Our bot (3x) | BTC HODL | S&P 500 |
+|---|---|---|---|
+| CAGR | **+28.9%** | ~+15% | ~+10% |
+| Max DD | -24.7% | -70% | -25% |
+| Sharpe | **3.83** | ~0.5 | ~0.6 |
+
+**Beats BTC HODL on every metric. 3x the return of S&P 500 with similar drawdown. Sharpe is 6-8x better than either passive strategy.**
+
+### Caveats (don't get euphoric)
+
+1. **Backtest ≠ live.** Real performance always degrades. Expect 70-80% of backtest → realistic +20-22% CAGR.
+2. **5 years is one sample path.** Different period could give different results.
+3. **Funding rate approximated** at 0.01%/8h fixed. Real funding spikes to 0.1%/8h in euphoric markets → could shave 3-5% CAGR.
+4. **Slippage approximated** at 0.05%/side. Flash crashes can hit 1-2% in single fills.
+5. **Subtle backtest bias** — model architecture choices were informed by 2020-2025 results.
+
+**Realistic live expectation: +18-22% CAGR with -25% to -35% drawdowns.**
+
+### This is the deployable benchmark
+**v6-prime + ensemble + combined_60_20 filter + 100% sizing + 3x leverage**
+
+Files:
+- `experiments/backtest_results.json` — full 16-backtest output
+- `src/backtest/engine.py` — leverage support
+- `src/models/run_backtest.py` — sweep config
+
+### What's next
+1. Phase 4: Kraken integration to actually deploy this
+2. Test direction="both" (long + short)
+3. 15min data with leverage backtest
+
+---
+
+## 17. Next Directions (as of 2026-04-12)
+
+**⭐⭐ DEPLOYABLE STRATEGY (2026-04-12, Eval 15): v6-prime + ensemble + combined_60_20 filter + 100% sizing + 3x leverage → +28.9% CAGR, -24.7% max DD, Sharpe 3.83, 69.5% win rate, 82 trades over 3.66 years, ZERO liquidations. Beats S&P 500 3x return at comparable drawdown. Realistic live expectation: +18-22% CAGR.**
+
+**Per-trade benchmark (Eval 12):** v6-prime + combined_65_15 filter → +3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97 (per trade)
 
 Next directions:
 

@@ -118,5 +118,14 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 ### Eval 12 — v6-prime + 3 seeds + SWA + combined filter **⭐⭐ Per-trade best**
 *(eval_v6_prime.py with N_SEEDS=3, SWA_START=15. Combined filter (conf>0.65 + asym>1.5) → **+3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97**. Fold 1 collapse fixed by ensembling. Results: experiments/eval_v6_prime_results.json)*
 
-### Eval 13 — Realistic backtest (12 filter × sizing combinations) **⭐ Reality check**
-*(run_backtest.py — sequential portfolio simulator with $5k capital, fees, slippage, capital constraints. Best: combined_60_20 + fixed_100pct → +28.5% return / +7.1% CAGR / -6.5% DD / Sharpe 1.83 / 49 trades over 3.66 years. Per-trade EV 3.98% in eval became 7.1% CAGR in backtest because 432 of 481 signals skipped for capital. Results: experiments/backtest_results.json)*
+### Eval 13 — First realistic backtest (12 combinations, with 30% reserve)
+*(run_backtest.py — fixed sizing variants with 30% reserve. Best: combined_60_20 + fixed_100pct → +28.5% / +7.1% CAGR / -6.5% DD / Sharpe 1.83.)*
+
+### Eval 14 — Filter sweep with 10% sizing (no reserve)
+*(run_backtest.py — 6 filter strengths with 10% sizing. Found: looser filters collapse to 29% win rate. Best: combined_60_20 → +22.7% / +5.8% CAGR. Worse than Eval 13 because position size matters more than trade count.)*
+
+### Eval 14b — Sizing sweep on combined_60_20 (no reserve)
+*(run_backtest.py — 6 sizings 100% to 10%. Removing reserve added 13% to return. Best: 100% → +41.7% / +10.0% CAGR / -9.3% DD / Sharpe 2.44. First time CAGR beat S&P 500.)*
+
+### Eval 15 — Leverage sweep (4 sizings × 4 leverages = 16) **⭐⭐ DEPLOYABLE**
+*(run_backtest.py — leverage added to engine with funding rate + liquidation check. Best: 100% × 3x leverage → +153% return / +28.9% CAGR / -24.7% DD / Sharpe 3.83 / 82 trades / 69.5% win rate / ZERO liquidations across all 16 backtests. Realistic live expectation: +18-22% CAGR. Results: experiments/backtest_results.json)*
