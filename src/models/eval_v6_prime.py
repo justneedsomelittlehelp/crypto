@@ -744,61 +744,139 @@ def main():
     print(f"  FILTER ANALYSIS — long-only, filtered")
     print(f"{'=' * 70}")
 
-    def compute_filtered_ev(filter_mask):
-        """Compute long EV for samples matching filter (must still be pred=1)."""
+    def compute_filter_stats(filter_mask):
+        """Compute full trading stats for samples matching filter.
+
+        Returns dict with:
+          n_trades, precision, avg_win, avg_loss,
+          ev_arith (arithmetic mean = EV/trade),
+          ev_geom (geometric mean return per trade, compound-adjusted),
+          compound_total (what $1 becomes after all trades),
+          max_consec_losses, sharpe
+        """
         m = filter_mask & (preds == 1)
-        if m.sum() == 0:
-            return 0.0, 0
-        wins = m & (labels == 1)
-        losses = m & (labels == 0)
-        ev = (tp_pct_all[wins].sum() - sl_pct_all[losses].sum()) / m.sum() * 100
-        return float(ev), int(m.sum())
+        n = int(m.sum())
+        if n == 0:
+            return {"n_trades": 0, "precision": 0.0, "avg_win": 0.0,
+                    "avg_loss": 0.0, "ev_arith": 0.0, "ev_geom": 0.0,
+                    "compound_total": 1.0, "max_consec_losses": 0, "sharpe": 0.0}
+
+        wins_mask = m & (labels == 1)
+        losses_mask = m & (labels == 0)
+        n_wins = int(wins_mask.sum())
+        n_losses = int(losses_mask.sum())
+
+        # Per-trade returns (signed)
+        returns = np.zeros(n)
+        sel_preds = preds[m]
+        sel_labels = labels[m]
+        sel_tp = tp_pct_all[m]
+        sel_sl = sl_pct_all[m]
+        for j in range(n):
+            if sel_labels[j] == 1:
+                returns[j] = sel_tp[j]   # win
+            else:
+                returns[j] = -sel_sl[j]  # loss
+
+        # Sort by chronological order for streak/compound calculation
+        # (samples are already in fold order which is chronological)
+
+        # Arithmetic mean (EV per trade)
+        ev_arith = returns.mean() * 100
+
+        # Geometric mean: (prod(1+r))^(1/n) - 1
+        # Use log-sum-exp for numerical stability
+        log_returns = np.log1p(returns)
+        ev_geom = (np.exp(log_returns.mean()) - 1) * 100
+
+        # Compound total: what $1 becomes
+        compound_total = float(np.exp(log_returns.sum()))
+
+        # Win rate = precision of long predictions
+        precision = n_wins / n
+
+        # Avg win / avg loss (magnitudes, in %)
+        avg_win = float(sel_tp[sel_labels == 1].mean() * 100) if n_wins > 0 else 0.0
+        avg_loss = float(sel_sl[sel_labels == 0].mean() * 100) if n_losses > 0 else 0.0
+
+        # Max consecutive losses
+        is_loss = (returns < 0).astype(int)
+        max_streak = 0
+        cur = 0
+        for x in is_loss:
+            if x == 1:
+                cur += 1
+                max_streak = max(max_streak, cur)
+            else:
+                cur = 0
+
+        # Sharpe-like: mean / std (per-trade, not annualized)
+        sharpe = float(returns.mean() / returns.std()) if returns.std() > 0 else 0.0
+
+        return {
+            "n_trades": n,
+            "precision": round(precision, 4),
+            "avg_win": round(avg_win, 3),
+            "avg_loss": round(avg_loss, 3),
+            "ev_arith": round(float(ev_arith), 3),
+            "ev_geom": round(float(ev_geom), 3),
+            "compound_total": round(compound_total, 3),
+            "max_consec_losses": max_streak,
+            "sharpe": round(sharpe, 3),
+        }
 
     filter_results = {}
 
+    def print_row(label, stats):
+        """Print a filter's stats in a compact row."""
+        print(f"  {label:<18} {stats['n_trades']:>7,} trades  "
+              f"prec={stats['precision']*100:5.1f}%  "
+              f"EV(arith)={stats['ev_arith']:+6.2f}%  "
+              f"EV(geom)={stats['ev_geom']:+6.2f}%  "
+              f"×{stats['compound_total']:.1f}")
+
     # 1. Raw confidence thresholds
     print(f"\n  (A) Raw confidence (sigmoid(logit) > threshold):")
-    print(f"  {'Threshold':<12} {'Trades':>9} {'EV/trade':>12} {'Annual freq*':>14}")
     for th in [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]:
         mask = probs_all > th
-        ev, n = compute_filtered_ev(mask)
-        annual = n / (len(preds) / 8760) if len(preds) > 0 else 0   # 1h bars → trades/year
-        filter_results[f"conf_{th}"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
-        print(f"  {th:<12} {n:>9,} {ev:>+11.3f}% {annual:>13.0f}/y")
+        stats = compute_filter_stats(mask)
+        filter_results[f"conf_{th}"] = stats
+        print_row(f"conf > {th}", stats)
 
-    # 2. Expected EV filter (only trade when expected return is positive)
+    # 2. Expected EV filter
     print(f"\n  (B) Expected EV filter (P(tp)*tp - P(sl)*sl > threshold):")
-    print(f"  {'EV threshold':<14} {'Trades':>9} {'EV/trade':>12}")
     expected_ev = probs_all * tp_pct_all - (1 - probs_all) * sl_pct_all
     for th in [0.00, 0.01, 0.02, 0.03, 0.04, 0.05]:
         mask = expected_ev > th
-        ev, n = compute_filtered_ev(mask)
-        filter_results[f"expev_{th}"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
-        print(f"  {th:<14} {n:>9,} {ev:>+11.3f}%")
+        stats = compute_filter_stats(mask)
+        filter_results[f"expev_{th}"] = stats
+        print_row(f"expEV > {th}", stats)
 
-    # 3. Asymmetry filter (only trade when tp > ratio × sl)
+    # 3. Asymmetry filter
     print(f"\n  (C) Asymmetry filter (tp_pct / sl_pct > ratio):")
-    print(f"  {'Ratio':<8} {'Trades':>9} {'EV/trade':>12}")
     safe_ratio = tp_pct_all / np.clip(sl_pct_all, 1e-8, None)
     for ratio in [1.0, 1.5, 2.0, 2.5, 3.0]:
         mask = safe_ratio > ratio
-        ev, n = compute_filtered_ev(mask)
-        filter_results[f"asym_{ratio}"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
-        print(f"  {ratio:<8} {n:>9,} {ev:>+11.3f}%")
+        stats = compute_filter_stats(mask)
+        filter_results[f"asym_{ratio}"] = stats
+        print_row(f"tp/sl > {ratio}", stats)
 
-    # 4. Combined: high confidence AND favorable asymmetry
-    print(f"\n  (D) Combined (confidence > 0.65 AND tp/sl > 1.5):")
+    # 4. Combined filters
+    print(f"\n  (D) Combined filters:")
     mask = (probs_all > 0.65) & (safe_ratio > 1.5)
-    ev, n = compute_filtered_ev(mask)
-    filter_results["combined_65_15"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
-    print(f"  {n:,} trades, EV = {ev:+.3f}% per trade")
+    stats = compute_filter_stats(mask)
+    filter_results["combined_65_15"] = stats
+    print_row("conf>0.65 + asym>1.5", stats)
 
-    # 5. Combined: high confidence AND positive expected EV
-    print(f"\n  (E) Combined (confidence > 0.65 AND expected EV > 0.02):")
     mask = (probs_all > 0.65) & (expected_ev > 0.02)
-    ev, n = compute_filtered_ev(mask)
-    filter_results["combined_65_exev02"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
-    print(f"  {n:,} trades, EV = {ev:+.3f}% per trade")
+    stats = compute_filter_stats(mask)
+    filter_results["combined_65_exev02"] = stats
+    print_row("conf>0.65 + expEV>0.02", stats)
+
+    mask = (probs_all > 0.60) & (safe_ratio > 2.0)
+    stats = compute_filter_stats(mask)
+    filter_results["combined_60_asym20"] = stats
+    print_row("conf>0.60 + asym>2.0", stats)
 
     # Logit distribution diagnostic
     print(f"\n  Logit distribution:")
