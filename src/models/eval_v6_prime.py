@@ -92,7 +92,7 @@ def precompute_vp_labels(
     ceiling_dist: np.ndarray,
     floor_dist: np.ndarray,
     num_peaks: np.ndarray,
-) -> tuple[np.ndarray, dict]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     """Per-sample VP-derived TP/SL first-hit labels.
 
     For each bar:
@@ -104,10 +104,14 @@ def precompute_vp_labels(
 
     Returns:
         labels: (n,) float32 array with {0, 1, NaN}
+        tp_pct: (n,) float32 array with per-sample TP % (NaN for skipped)
+        sl_pct: (n,) float32 array with per-sample SL % (NaN for skipped)
         stats: dict with label distribution info
     """
     n = len(close)
     labels = np.full(n, np.nan, dtype=np.float32)
+    tp_pct_arr = np.full(n, np.nan, dtype=np.float32)
+    sl_pct_arr = np.full(n, np.nan, dtype=np.float32)
 
     # Vol scaling (still applied — scales TP/SL with current market vol)
     vol_window = 30
@@ -119,7 +123,7 @@ def precompute_vp_labels(
 
     valid_vol = rolling_vol[~np.isnan(rolling_vol)]
     if len(valid_vol) == 0:
-        return labels, {"error": "no valid vol"}
+        return labels, tp_pct_arr, sl_pct_arr, {"error": "no valid vol"}
     median_vol = np.median(valid_vol)
     if median_vol < 1e-10:
         median_vol = 1e-10
@@ -161,6 +165,10 @@ def precompute_vp_labels(
         tp_pct_list.append(tp_pct)
         sl_pct_list.append(sl_pct)
 
+        # Store per-sample TP/SL (always, even if label ends up NaN)
+        tp_pct_arr[i] = tp_pct
+        sl_pct_arr[i] = sl_pct
+
         # First-hit logic
         entry = close[i]
         tp_level = entry * (1 + tp_pct)
@@ -193,17 +201,20 @@ def precompute_vp_labels(
         "sl_pct_median": float(np.median(sl_pct_list)) if sl_pct_list else 0,
         "sl_pct_std": float(np.std(sl_pct_list)) if sl_pct_list else 0,
     }
-    return labels, stats
+    return labels, tp_pct_arr, sl_pct_arr, stats
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Dataset
 # ═══════════════════════════════════════════════════════════════════
 class FastDataset(Dataset):
-    def __init__(self, features, labels, regime=None, lookback=LOOKBACK_BARS_MODEL):
+    def __init__(self, features, labels, regime=None, tp_pct=None, sl_pct=None,
+                 lookback=LOOKBACK_BARS_MODEL):
         self.features = features
         self.labels = labels
         self.regime = regime
+        self.tp_pct = tp_pct    # np array or None
+        self.sl_pct = sl_pct
         self.lookback = lookback
         max_start = len(features) - lookback
         if max_start <= 0:
@@ -220,6 +231,20 @@ class FastDataset(Dataset):
         real_idx = self.valid_indices[idx]
         li = real_idx + self.lookback - 1
         return self.regime[li] if li < len(self.regime) else np.nan
+
+    def get_tp_pct(self, idx):
+        if self.tp_pct is None:
+            return np.nan
+        real_idx = self.valid_indices[idx]
+        li = real_idx + self.lookback - 1
+        return self.tp_pct[li] if li < len(self.tp_pct) else np.nan
+
+    def get_sl_pct(self, idx):
+        if self.sl_pct is None:
+            return np.nan
+        real_idx = self.valid_indices[idx]
+        li = real_idx + self.lookback - 1
+        return self.sl_pct[li] if li < len(self.sl_pct) else np.nan
 
     def __len__(self):
         return len(self.valid_indices)
@@ -410,7 +435,7 @@ def main():
 
     # ─── Compute VP-derived labels ───
     print("\nComputing VP-derived labels...")
-    labels, label_stats = precompute_vp_labels(
+    labels, tp_pct_arr, sl_pct_arr, label_stats = precompute_vp_labels(
         close=df["close"].values,
         ceiling_dist=df["vp_ceiling_dist"].values,
         floor_dist=df["vp_floor_dist"].values,
@@ -434,6 +459,7 @@ def main():
 
     # ─── Walk-forward ───
     all_preds, all_labels, all_regimes = [], [], []
+    all_tp_pct, all_sl_pct = [], []
     fold_results = []
 
     print(f"\nStarting walk-forward...")
@@ -468,6 +494,8 @@ def main():
             features[test_idx[0]:test_idx[-1]+1],
             labels_t[test_idx[0]:test_idx[-1]+1],
             regime[test_idx[0]:test_idx[-1]+1],
+            tp_pct=tp_pct_arr[test_idx[0]:test_idx[-1]+1],
+            sl_pct=sl_pct_arr[test_idx[0]:test_idx[-1]+1],
         )
 
         if len(train_ds) < 100 or len(val_ds) < 50 or len(test_ds) < 50:
@@ -491,9 +519,23 @@ def main():
         preds, fold_labels = evaluate_fold(model, test_loader, device, use_amp)
 
         fold_regimes = np.array([test_ds.get_regime(j) for j in range(len(test_ds))])
+        fold_tp_pct = np.array([test_ds.get_tp_pct(j) for j in range(len(test_ds))])
+        fold_sl_pct = np.array([test_ds.get_sl_pct(j) for j in range(len(test_ds))])
 
         fold_acc = (preds == fold_labels).mean()
         fold_time = time.time() - fold_start
+
+        # Per-fold real EV (long-only strategy: trade when pred=1)
+        long_mask = preds == 1
+        long_wins = long_mask & (fold_labels == 1)
+        long_losses = long_mask & (fold_labels == 0)
+        n_long = long_mask.sum()
+        if n_long > 0:
+            fold_long_ev = (
+                fold_tp_pct[long_wins].sum() - fold_sl_pct[long_losses].sum()
+            ) / n_long * 100  # Convert to percentage
+        else:
+            fold_long_ev = 0.0
 
         fold_results.append({
             "fold": i + 1,
@@ -502,12 +544,19 @@ def main():
             "n_test": len(preds),
             "epochs_run": epochs_run,
             "time_sec": round(fold_time, 1),
+            "n_long_trades": int(n_long),
+            "long_ev_real": round(float(fold_long_ev), 3),
+            "avg_tp_pct": round(float(np.nanmean(fold_tp_pct)), 4),
+            "avg_sl_pct": round(float(np.nanmean(fold_sl_pct)), 4),
         })
         all_preds.extend(preds.tolist())
         all_labels.extend(fold_labels.tolist())
         all_regimes.extend(fold_regimes.tolist())
+        all_tp_pct.extend(fold_tp_pct.tolist())
+        all_sl_pct.extend(fold_sl_pct.tolist())
 
         print(f"    Acc: {fold_acc:.4f}, epochs={epochs_run}, {fold_time:.0f}s")
+        print(f"    Long trades: {int(n_long)}, Real EV/trade: {fold_long_ev:+.3f}%")
 
         del model
         if torch.cuda.is_available():
@@ -519,6 +568,8 @@ def main():
     preds = np.array(all_preds)
     labels = np.array(all_labels)
     regimes = np.array(all_regimes)
+    tp_pct_all = np.array(all_tp_pct)
+    sl_pct_all = np.array(all_sl_pct)
 
     def confusion(p, l):
         tp = int(((p == 1) & (l == 1)).sum())
@@ -538,14 +589,61 @@ def main():
     bull_stats = confusion(preds[bull], labels[bull]) if bull.sum() > 0 else None
     bear_stats = confusion(preds[bear], labels[bear]) if bear.sum() > 0 else None
 
-    # EV (using REFERENCE 7.5/3 ratios — note: labels are per-sample, this is approximate)
-    regime_ev = {}
-    if bull_stats:
-        regime_ev["bull_long"] = round(bull_stats["precision"] * 7.5 - (1 - bull_stats["precision"]) * 3.0, 2)
-        regime_ev["bull_short"] = round(bull_stats["npv"] * 3.0 - (1 - bull_stats["npv"]) * 7.5, 2)
-    if bear_stats:
-        regime_ev["bear_long"] = round(bear_stats["precision"] * 3.0 - (1 - bear_stats["precision"]) * 7.5, 2)
-        regime_ev["bear_short"] = round(bear_stats["npv"] * 7.5 - (1 - bear_stats["npv"]) * 3.0, 2)
+    # ─── REAL per-sample EV ───
+    # Strategies:
+    #   Long only: trade when pred=1. Win = actual tp_pct, Loss = -actual sl_pct
+    #   Short only: trade when pred=0. Win = actual sl_pct, Loss = -actual tp_pct
+    #   Both sides: trade every prediction
+    def compute_real_ev(mask, pred, lbl, tp, sl):
+        """Compute real EV for a strategy mask (which samples to trade on).
+        mask can be (pred == 1) for long-only, (pred == 0) for short-only, etc.
+        """
+        if mask.sum() == 0:
+            return 0.0, 0
+        selected_pred = pred[mask]
+        selected_lbl = lbl[mask]
+        selected_tp = tp[mask]
+        selected_sl = sl[mask]
+
+        profits = np.zeros(len(selected_pred))
+        for j in range(len(selected_pred)):
+            if selected_pred[j] == 1:  # long trade
+                if selected_lbl[j] == 1:  # TP hit
+                    profits[j] = selected_tp[j]
+                else:  # SL hit
+                    profits[j] = -selected_sl[j]
+            else:  # short trade
+                if selected_lbl[j] == 0:  # SL hit (price went down — short wins)
+                    profits[j] = selected_sl[j]
+                else:  # TP hit (price went up — short loses)
+                    profits[j] = -selected_tp[j]
+
+        return float(np.mean(profits) * 100), int(mask.sum())  # Return as percentage
+
+    # Long-only: trade when pred=1
+    long_mask = preds == 1
+    long_ev, long_n = compute_real_ev(long_mask, preds, labels, tp_pct_all, sl_pct_all)
+
+    # Short-only: trade when pred=0
+    short_mask = preds == 0
+    short_ev, short_n = compute_real_ev(short_mask, preds, labels, tp_pct_all, sl_pct_all)
+
+    # Both sides
+    both_ev = (long_ev * long_n + short_ev * short_n) / max(long_n + short_n, 1)
+
+    # Per-regime real EV
+    real_regime_ev = {}
+    for regime_name, mask_base in [("bull", bull), ("bear", bear)]:
+        # Long
+        m = mask_base & (preds == 1)
+        ev, n = compute_real_ev(m, preds, labels, tp_pct_all, sl_pct_all)
+        real_regime_ev[f"{regime_name}_long"] = round(ev, 3)
+        real_regime_ev[f"{regime_name}_long_n"] = n
+        # Short
+        m = mask_base & (preds == 0)
+        ev, n = compute_real_ev(m, preds, labels, tp_pct_all, sl_pct_all)
+        real_regime_ev[f"{regime_name}_short"] = round(ev, 3)
+        real_regime_ev[f"{regime_name}_short_n"] = n
 
     print(f"\n{'=' * 70}")
     print(f"  v6-PRIME RESULTS (VP-derived labels + regularization)")
@@ -553,18 +651,34 @@ def main():
     print(f"  Total time: {total_time/60:.1f} min")
     print(f"  Overall: Acc={overall['accuracy']:.4f}  Prec={overall['precision']:.4f}  NPV={overall['npv']:.4f}")
     print(f"  TP={overall['tp']} FP={overall['fp']} TN={overall['tn']} FN={overall['fn']}")
+
+    print(f"\n  REAL EV (per-sample TP/SL):")
+    print(f"    Long-only  (pred=1, {long_n:,} trades):  {long_ev:+.3f}% per trade")
+    print(f"    Short-only (pred=0, {short_n:,} trades):  {short_ev:+.3f}% per trade")
+    print(f"    Both sides  ({long_n+short_n:,} trades):  {both_ev:+.3f}% per trade")
+
     print(f"\n  Per-fold:")
+    print(f"  {'Fold':<6} {'Period':<28} {'Acc':>7} {'Epochs':>7} {'Long#':>7} {'Long EV':>9} {'TP avg':>8} {'SL avg':>8}")
     for fr in fold_results:
-        print(f"    Fold {fr['fold']:<3} {fr['period']:<30} {fr['acc']*100:6.1f}% ({fr['epochs_run']} epochs, {fr['n_test']} samples)")
+        print(f"  {fr['fold']:<6} {fr['period']:<28} {fr['acc']*100:6.1f}% {fr['epochs_run']:>7} {fr.get('n_long_trades', 0):>7,} {fr.get('long_ev_real', 0):+8.3f}% {fr.get('avg_tp_pct', 0)*100:7.2f}% {fr.get('avg_sl_pct', 0)*100:7.2f}%")
 
     if bull_stats:
         print(f"\n  BULL ({bull_stats['n']} bars): Prec={bull_stats['precision']:.4f}  NPV={bull_stats['npv']:.4f}")
-        print(f"    Long EV (ref 7.5/3): {regime_ev.get('bull_long', 0):+.2f}%")
+        print(f"    Long-only:  {real_regime_ev['bull_long']:+.3f}% ({real_regime_ev['bull_long_n']:,} trades)")
+        print(f"    Short-only: {real_regime_ev['bull_short']:+.3f}% ({real_regime_ev['bull_short_n']:,} trades)")
     if bear_stats:
         print(f"\n  BEAR ({bear_stats['n']} bars): Prec={bear_stats['precision']:.4f}  NPV={bear_stats['npv']:.4f}")
-        print(f"    Long EV (ref 7.5/3): {regime_ev.get('bear_long', 0):+.2f}%  Short EV: {regime_ev.get('bear_short', 0):+.2f}%")
+        print(f"    Long-only:  {real_regime_ev['bear_long']:+.3f}% ({real_regime_ev['bear_long_n']:,} trades)")
+        print(f"    Short-only: {real_regime_ev['bear_short']:+.3f}% ({real_regime_ev['bear_short_n']:,} trades)")
 
-    print(f"\n  Note: EV is approximate — labels are per-sample TP/SL, not fixed 7.5/3")
+    # Keep the legacy fake EV for comparison with older runs
+    regime_ev = {}
+    if bull_stats:
+        regime_ev["bull_long_fake"] = round(bull_stats["precision"] * 7.5 - (1 - bull_stats["precision"]) * 3.0, 2)
+        regime_ev["bull_short_fake"] = round(bull_stats["npv"] * 3.0 - (1 - bull_stats["npv"]) * 7.5, 2)
+    if bear_stats:
+        regime_ev["bear_long_fake"] = round(bear_stats["precision"] * 3.0 - (1 - bear_stats["precision"]) * 7.5, 2)
+        regime_ev["bear_short_fake"] = round(bear_stats["npv"] * 7.5 - (1 - bear_stats["npv"]) * 3.0, 2)
 
     # Save
     output = {
@@ -587,7 +701,15 @@ def main():
         "overall": overall,
         "bull_stats": bull_stats,
         "bear_stats": bear_stats,
-        "regime_ev": regime_ev,
+        "real_ev": {
+            "long_only": round(long_ev, 3),
+            "long_trades": long_n,
+            "short_only": round(short_ev, 3),
+            "short_trades": short_n,
+            "both_sides": round(both_ev, 3),
+            **real_regime_ev,
+        },
+        "legacy_regime_ev_fake": regime_ev,
         "folds": fold_results,
         "total_time_min": round(total_time / 60, 1),
     }

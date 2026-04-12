@@ -1,0 +1,156 @@
+{
+  "config": {
+    "model": "v6-prime (TemporalEnrichedV6Prime)",
+    "labels": "VP-derived TP/SL",
+    "tp_ratio": 0.8,
+    "sl_ratio": 0.6,
+    "tp_range": [
+      0.01,
+      0.15
+    ],
+    "sl_range": [
+      0.01,
+      0.15
+    ],
+    "min_peaks": 1,
+    "dropout": 0.3,
+    "weight_decay": 0.001,
+    "label_smoothing": 0.1,
+    "optimizer": "AdamW",
+    "lr": 0.0005,
+    "batch_size": 512
+  },
+  "label_stats": {
+    "n_valid": 63909,
+    "n_label_1": 25755,
+    "n_label_0": 38154,
+    "n_skipped_nopeaks": 3133,
+    "n_skipped_nanstruct": 0,
+    "n_skipped_novol": 0,
+    "tp_pct_mean": 0.11010461936154257,
+    "tp_pct_median": 0.14280351117227885,
+    "tp_pct_std": 0.04930321268413552,
+    "sl_pct_mean": 0.07015584009018452,
+    "sl_pct_median": 0.052966540810477074,
+    "sl_pct_std": 0.05669882848947917
+  },
+  "overall": {
+    "tp": 7602,
+    "fp": 3686,
+    "tn": 13151,
+    "fn": 3403,
+    "precision": 0.6735,
+    "npv": 0.7944,
+    "accuracy": 0.7454,
+    "n": 27842
+  },
+  "bull_stats": {
+    "tp": 2968,
+    "fp": 1810,
+    "tn": 8561,
+    "fn": 2614,
+    "precision": 0.6212,
+    "npv": 0.7661,
+    "accuracy": 0.7227,
+    "n": 15953
+  },
+  "bear_stats": {
+    "tp": 4617,
+    "fp": 1876,
+    "tn": 4590,
+    "fn": 789,
+    "precision": 0.7111,
+    "npv": 0.8533,
+    "accuracy": 0.7755,
+    "n": 11872
+  },
+  "regime_ev": {
+    "bull_long": 3.52,
+    "bull_short": 0.54,
+    "bear_long": -0.03,
+    "bear_short": 5.96
+  },
+  "folds": [
+    {
+      "fold": 1,
+      "period": "2020-07-01 \u2192 2021-01-01",
+      "acc": 0.7215229704216488,
+      "n_test": 3178,
+      "epochs_run": 18,
+      "time_sec": 110.7
+    },
+    {
+      "fold": 2,
+      "period": "2021-01-01 \u2192 2021-07-01",
+      "acc": 0.6683937823834197,
+      "n_test": 3088,
+      "epochs_run": 40,
+      "time_sec": 111.3
+    },
+    {
+      "fold": 3,
+      "period": "2021-07-01 \u2192 2022-01-01",
+      "acc": 0.8870598994055784,
+      "n_test": 2187,
+      "epochs_run": 19,
+      "time_sec": 56.7
+    },
+    {
+      "fold": 4,
+      "period": "2022-01-01 \u2192 2022-07-01",
+      "acc": 0.5839126117179742,
+      "n_test": 3021,
+      "epochs_run": 34,
+      "time_sec": 126.8
+    },
+    {
+      "fold": 5,
+      "period": "2022-07-01 \u2192 2023-01-01",
+      "acc": 0.9035346097201767,
+      "n_test": 2716,
+      "epochs_run": 20,
+      "time_sec": 70.7
+    },
+    {
+      "fold": 6,
+      "period": "2023-01-01 \u2192 2023-07-01",
+      "acc": 0.6887700534759358,
+      "n_test": 2805,
+      "epochs_run": 33,
+      "time_sec": 122.8
+    },
+    {
+      "fold": 7,
+      "period": "2023-07-01 \u2192 2024-01-01",
+      "acc": 0.6782608695652174,
+      "n_test": 2990,
+      "epochs_run": 26,
+      "time_sec": 104.6
+    },
+    {
+      "fold": 8,
+      "period": "2024-01-01 \u2192 2024-07-01",
+      "acc": 0.7619509043927648,
+      "n_test": 3096,
+      "epochs_run": 28,
+      "time_sec": 120.5
+    },
+    {
+      "fold": 9,
+      "period": "2024-07-01 \u2192 2025-01-01",
+      "acc": 0.7877072381722604,
+      "n_test": 2473,
+      "epochs_run": 23,
+      "time_sec": 106.4
+    },
+    {
+      "fold": 10,
+      "period": "2025-01-01 \u2192 2025-07-01",
+      "acc": 0.861451048951049,
+      "n_test": 2288,
+      "epochs_run": 17,
+      "time_sec": 84.7
+    }
+  ],
+  "total_time_min": 16.9
+}
