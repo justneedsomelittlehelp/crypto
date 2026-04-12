@@ -57,6 +57,12 @@ class BacktestConfig:
     funding_rate_per_8h: float = 0.0001  # 0.01% per 8h funding (typical avg)
     liquidation_threshold: float = 0.95  # Liquidate at 95% loss of margin
 
+    # Risk circuit breakers
+    circuit_breaker_dd: float = 0.0    # 0 = disabled. Pause new entries if dd exceeds this fraction (e.g., 0.15 = 15%)
+    circuit_breaker_dd_reset: float = 0.0  # Resume when dd recovers above this (e.g., 0.08 = 8%)
+    max_consec_losses: int = 0         # 0 = disabled. Trigger killswitch after N consecutive losses
+    killswitch_pause_bars: int = 0     # Pause duration after killswitch (in bars)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Position
@@ -114,12 +120,18 @@ class Portfolio:
         self.cfg = config
         self.cash = config.starting_capital
         self.equity = config.starting_capital
+        self.peak_equity = config.starting_capital
         self.open_positions: list[Position] = []
         self.closed_trades: list[ClosedTrade] = []
         self.equity_history: list[tuple[pd.Timestamp, float]] = []  # (date, equity)
         self.signals_skipped_no_capital = 0
         self.signals_skipped_pyramid = 0
         self.signals_skipped_filter = 0
+        self.signals_skipped_breaker = 0
+        # Circuit breaker state
+        self.dd_breaker_active = False
+        self.consecutive_losses = 0
+        self.killswitch_until_bar = -1
 
     def available_capital(self) -> float:
         """Capital available for new positions = (equity × (1 - reserve_pct)) - committed."""
@@ -161,11 +173,40 @@ class Portfolio:
             position_value += p.size_dollars + unrealized_pnl
         self.equity = self.cash + position_value
 
+        # Track peak for drawdown circuit breaker
+        if self.equity > self.peak_equity:
+            self.peak_equity = self.equity
+
+        # Update drawdown breaker state (check if we should activate or deactivate)
+        if self.cfg.circuit_breaker_dd > 0:
+            current_dd = (self.equity - self.peak_equity) / self.peak_equity  # negative
+            if not self.dd_breaker_active:
+                # Activate if current dd worse than threshold
+                if current_dd <= -self.cfg.circuit_breaker_dd:
+                    self.dd_breaker_active = True
+            else:
+                # Reset if current dd recovered above reset threshold
+                if current_dd >= -self.cfg.circuit_breaker_dd_reset:
+                    self.dd_breaker_active = False
+
+    def is_breaker_active(self, bar_idx: int) -> bool:
+        """Returns True if any circuit breaker is currently blocking new entries."""
+        if self.dd_breaker_active:
+            return True
+        if self.killswitch_until_bar > bar_idx:
+            return True
+        return False
+
     def try_open_position(
         self, bar_idx: int, date: pd.Timestamp, price: float,
         direction: int, tp_pct: float, sl_pct: float,
     ) -> bool:
         """Attempt to open a new position. Returns True if opened."""
+
+        # Circuit breaker check (DD breaker or killswitch)
+        if self.is_breaker_active(bar_idx):
+            self.signals_skipped_breaker += 1
+            return False
 
         # Pyramiding check: skip if same-direction position already open and pyramiding off
         if not self.cfg.allow_pyramiding:
@@ -348,6 +389,17 @@ class Portfolio:
             pp.size_dollars for pp in self.open_positions
         )))
 
+        # Update consecutive loss counter and trigger killswitch
+        if net_pnl < 0:
+            self.consecutive_losses += 1
+            if (self.cfg.max_consec_losses > 0 and
+                self.consecutive_losses >= self.cfg.max_consec_losses):
+                # Trigger killswitch
+                self.killswitch_until_bar = bar_idx + self.cfg.killswitch_pause_bars
+                self.consecutive_losses = 0  # Reset after triggering
+        else:
+            self.consecutive_losses = 0
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Engine entry point
@@ -424,5 +476,6 @@ def run_backtest(
         "n_trades_executed": len(portfolio.closed_trades),
         "skipped_no_capital": portfolio.signals_skipped_no_capital,
         "skipped_pyramid": portfolio.signals_skipped_pyramid,
+        "skipped_breaker": portfolio.signals_skipped_breaker,
     }
     return portfolio, summary

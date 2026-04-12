@@ -44,26 +44,25 @@ FILTER_VARIANTS = {
 }
 
 SIZING_VARIANTS = {
-    # Sizing × leverage sweep on combined_60_20 (4 sizings × 4 leverages = 16 runs)
-    "100pct_1x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 1.0},
-    "100pct_2x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 2.0},
-    "100pct_3x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
-    "100pct_5x":  {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 5.0},
-
-    "50pct_1x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 1.0},
-    "50pct_2x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 2.0},
-    "50pct_3x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 3.0},
-    "50pct_5x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.50, "reserve_pct": 0.0, "leverage": 5.0},
-
-    "33pct_1x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 1.0},
-    "33pct_2x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 2.0},
-    "33pct_3x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 3.0},
-    "33pct_5x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.33, "reserve_pct": 0.0, "leverage": 5.0},
-
-    "25pct_1x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 1.0},
-    "25pct_2x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 2.0},
-    "25pct_3x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 3.0},
-    "25pct_5x":   {"sizing_mode": "fixed_pct", "position_size_pct": 0.25, "reserve_pct": 0.0, "leverage": 5.0},
+    # All variants use 100% sizing × 3x leverage (the deployable winner from Eval 15).
+    # Variations are in the circuit breaker configurations to test drawdown reduction.
+    "baseline":          {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0},
+    "dd_breaker_15":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "circuit_breaker_dd": 0.15, "circuit_breaker_dd_reset": 0.08},
+    "dd_breaker_20":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "circuit_breaker_dd": 0.20, "circuit_breaker_dd_reset": 0.10},
+    "dd_breaker_10":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "circuit_breaker_dd": 0.10, "circuit_breaker_dd_reset": 0.05},
+    "killswitch_4L":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "max_consec_losses": 4, "killswitch_pause_bars": 168},  # 7 days
+    "killswitch_5L":     {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "max_consec_losses": 5, "killswitch_pause_bars": 168},
+    "hybrid_15_4L":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "circuit_breaker_dd": 0.15, "circuit_breaker_dd_reset": 0.08,
+                          "max_consec_losses": 4, "killswitch_pause_bars": 168},
+    "hybrid_10_3L":      {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0,
+                          "circuit_breaker_dd": 0.10, "circuit_breaker_dd_reset": 0.05,
+                          "max_consec_losses": 3, "killswitch_pause_bars": 168},
 }
 
 
@@ -86,7 +85,7 @@ def run_one_backtest(data, filter_name, sizing_name):
     filter_cfg = FILTER_VARIANTS[filter_name]
     sizing_cfg = SIZING_VARIANTS[sizing_name]
 
-    # Build BacktestConfig (sizing variant can override reserve_pct and leverage)
+    # Build BacktestConfig
     config = BacktestConfig(
         starting_capital=5000.0,
         reserve_pct=sizing_cfg.get("reserve_pct", 0.30),
@@ -101,6 +100,11 @@ def run_one_backtest(data, filter_name, sizing_name):
         position_size_pct=sizing_cfg.get("position_size_pct", 0.20),
         # Leverage
         leverage=sizing_cfg.get("leverage", 1.0),
+        # Circuit breakers
+        circuit_breaker_dd=sizing_cfg.get("circuit_breaker_dd", 0.0),
+        circuit_breaker_dd_reset=sizing_cfg.get("circuit_breaker_dd_reset", 0.0),
+        max_consec_losses=sizing_cfg.get("max_consec_losses", 0),
+        killswitch_pause_bars=sizing_cfg.get("killswitch_pause_bars", 0),
     )
 
     # Parse dates from cached array
