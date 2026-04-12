@@ -105,3 +105,6 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 
 ### Eval 8 — v8 enriched 2+1 on 15min **(BEST ACCURACY 59.6%)** (walk-forward, TP=7.5%/SL=3%)
 *(eval_15min.py — Colab A100, batch=256, bf16. Results: experiments/eval_15min_results.json)*
+
+### Eval 9 — v6 baseline + funding rate fine-tune (walk-forward, TP=7.5%/SL=3%)
+*(eval_finetune_funding.py — Colab T4. Mixed results, fold 6 collapse. Abandoned. Results: experiments/eval_finetune_funding_results.json)*

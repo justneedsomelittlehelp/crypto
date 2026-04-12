@@ -217,15 +217,61 @@ RNN (vanishing gradients)
 
 ---
 
-## 10. Next Directions (as of 2026-04-11)
+## 10. Funding Rate Fine-Tuning (Eval 9 — mixed results, abandoned)
 
-The model has hit the **information ceiling of VP-only features** (~58-60% accuracy across all architectures). Next steps require new data sources:
+**Why built:** VP information ceiling ~60%. Hypothesis: funding rate captures market leverage (user's manual "liquidation heatmap" edge) and can add signal on top of VP.
 
-1. **FGI as input feature** (zero cost) — currently used only for label flipping. Feed raw FGI value and let model learn non-linear regime boundaries.
-2. **Funding rate + Open Interest** (from OKX API, free) — captures market leverage/positioning. Tells the model whether the crowd is pushing toward or away from VP barriers. OI drops detect liquidation cascades ("get in while others are dying").
-3. **Liquidation levels** (Coinglass, expensive) — exact price levels where leveraged positions get force-closed. Ruled out due to cost.
+**Approach:**
+- Stage 1: Train v6 backbone fresh per fold (VP-only, 24,737 params)
+- Stage 2: Freeze backbone, replace FC head with wider one (50→53 inputs), train only FC head (3,521 params) with 3 funding features added
 
-The user's manual trading strategy combines VP (macro barriers) with liquidation heatmaps (micro barriers). OI + funding rate is the best available proxy for liquidation data.
+**Data:** Binance GitHub CSV (2020-2024) + Gate.io API (2024-present) = 6,879 records at 8h resolution. Forward-filled to 1h bars. Pre-2020 zeros (no funding data before).
+
+**Features:** `funding_rate`, `funding_zscore` (30d rolling), `funding_trend` (24h change)
+
+### Results (Eval 9)
+
+| Fold | Baseline | Finetuned | Delta |
+|------|----------|-----------|-------|
+| 1 | 42.4% | 34.4% | **-8.0%** |
+| 2 | 59.7% | 59.6% | -0.1% |
+| 3 | 61.0% | **63.3%** | **+2.3%** |
+| 4 | 66.4% | 65.7% | -0.7% |
+| 5 | 68.6% | **70.4%** | **+1.8%** |
+| 6 | 59.3% | **40.5%** | **-18.7%** |
+| 7 | 77.6% | 77.0% | -0.5% |
+| 8 | 61.1% | **69.2%** | **+8.1%** |
+| 9 | 58.5% | **59.5%** | +1.0% |
+| 10 | 61.0% | **62.4%** | +1.5% |
+| **Overall** | **61.4%** | **60.1%** | **-1.3%** |
+
+**Bull long EV:** +1.01% (down from +1.57% VP-only)
+**Bear short EV:** +0.32% (up from -0.04%)
+
+**What went wrong:**
+- Fold 6 catastrophic collapse (-18.7%). 2023 H1 was a recovery period where funding was positive (crowded longs) but price went up. FC head learned "positive funding → reversal" from earlier data, then over-applied it.
+- Folds 1-2 had too little funding training data (funding history starts 2020).
+- Funding signal is regime-dependent — adding it as a flat feature causes brittle overfitting in transition periods.
+
+**Decision: Abandon funding fine-tuning.** The signal is real (positive deltas on later folds) but too unstable for production. Moving to TP/SL optimization and regularization instead.
+
+---
+
+## 11. Next Directions (as of 2026-04-12)
+
+VP information ceiling is ~60%. Funding rate fine-tuning was tried and abandoned (Eval 9). Next directions:
+
+1. **VP-derived TP/SL labels** — use `vp_ceiling_dist` and `vp_floor_dist` as per-sample TP/SL targets instead of fixed 7.5%/3%. Matches user's manual strategy of aiming at the next VP peak. Makes labels adaptive — tight ceilings → small TP, open space → large TP.
+
+2. **Regularization overhaul** — models currently converge in 1-2 epochs then overfit (`patience=15` wasted). Try:
+   - weight_decay=1e-3 (L2 regularization)
+   - dropout=0.3 (up from 0.15)
+   - label_smoothing=0.1
+   - AdamW optimizer (proper weight decay)
+
+3. **Combined test:** v6 + VP-derived TP/SL + regularization overhaul.
+
+Deprioritized: funding rate (too brittle), liquidation data (too expensive), tighter fixed TP/SL (fees), more architecture iterations (ceiling already hit).
 
 ---
 
