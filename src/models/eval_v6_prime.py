@@ -1,0 +1,602 @@
+"""Eval v6-prime: v6 architecture with VP-derived TP/SL labels + regularization.
+
+Key changes vs v6 baseline:
+  - Labels: VP-derived per-sample TP/SL (aimed at VP peaks, not fixed %)
+  - Regularization: dropout=0.3, weight_decay=1e-3, label_smoothing=0.1
+  - Optimizer: AdamW (proper weight decay)
+
+Hypothesis: Labels aligned with what the model predicts (VP barriers)
+should give cleaner training signal than fixed-% labels. Regularization
+overhaul should fix the "converges in 1-2 epochs" issue.
+
+Usage:
+    python -m src.models.eval_v6_prime
+"""
+
+import sys
+import json
+import time
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+
+sys.stdout.reconfigure(line_buffering=True)
+
+from src.config import (
+    LOOKBACK_BARS_MODEL, BARS_PER_DAY, EXPERIMENTS_DIR, LABEL_FGI_PATH,
+    LABEL_MAX_BARS, EPOCHS, EARLY_STOP_PATIENCE, REL_SPAN_PCT,
+)
+from src.features.pipelines.v1_raw import (
+    build_feature_matrix_v1, FEATURE_COLS_V1, VP_STRUCTURE_COLS_V1,
+    DERIVED_FEATURE_COLS_V1, feature_index_v1,
+)
+from src.models.architectures.v6_prime_vp_labels import TemporalEnrichedV6Prime
+
+# ═══════════════════════════════════════════════════════════════════
+# Config
+# ═══════════════════════════════════════════════════════════════════
+BATCH_SIZE = 512
+LR = 5e-4
+WEIGHT_DECAY = 1e-3         # NEW: L2 regularization via AdamW
+LABEL_SMOOTHING = 0.1       # NEW: soft labels
+DROPOUT = 0.3               # NEW: up from 0.15
+NUM_WORKERS = 4
+USE_COMPILE = True
+
+# VP-derived label parameters
+TP_RATIO = 0.8              # Aim 80% of the way to VP peak
+SL_RATIO = 0.6              # Stop 60% of the way to opposite VP peak
+TP_MIN = 0.01               # Minimum 1%
+TP_MAX = 0.15               # Maximum 15%
+SL_MIN = 0.01
+SL_MAX = 0.15
+MIN_PEAKS = 1               # Require at least 1 peak (ceiling OR floor)
+
+# Reference fixed TP/SL for EV calculations (approximation — actual labels are per-sample)
+TP_REF = 0.075
+SL_REF = 0.03
+
+FOLD_BOUNDARIES = [
+    "2020-01-01", "2020-07-01",
+    "2021-01-01", "2021-07-01",
+    "2022-01-01", "2022-07-01",
+    "2023-01-01", "2023-07-01",
+    "2024-01-01", "2024-07-01",
+    "2025-01-01", "2025-07-01",
+]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Regime array (still used for analytics, not labels)
+# ═══════════════════════════════════════════════════════════════════
+def build_regime_array(dates: np.ndarray) -> np.ndarray:
+    n = len(dates)
+    fgi_df = pd.read_csv(LABEL_FGI_PATH, parse_dates=["date"])
+    fgi_lookup = dict(zip(fgi_df["date"].dt.date, fgi_df["fgi_value"].astype(float)))
+    is_bull = np.full(n, np.nan)
+    for i in range(n):
+        dt = pd.Timestamp(dates[i]).date()
+        fgi = fgi_lookup.get(dt, np.nan)
+        if not np.isnan(fgi):
+            is_bull[i] = float(fgi >= 50)
+    return is_bull
+
+
+# ═══════════════════════════════════════════════════════════════════
+# VP-derived TP/SL labels
+# ═══════════════════════════════════════════════════════════════════
+def precompute_vp_labels(
+    close: np.ndarray,
+    ceiling_dist: np.ndarray,
+    floor_dist: np.ndarray,
+    num_peaks: np.ndarray,
+) -> tuple[np.ndarray, dict]:
+    """Per-sample VP-derived TP/SL first-hit labels.
+
+    For each bar:
+      TP = entry × (1 + ceiling_dist × REL_SPAN × TP_RATIO)
+      SL = entry × (1 - floor_dist × REL_SPAN × SL_RATIO)
+
+    TP/SL are clipped to [TP_MIN, TP_MAX] and [SL_MIN, SL_MAX].
+    Bars with num_peaks < MIN_PEAKS get NaN labels (skipped).
+
+    Returns:
+        labels: (n,) float32 array with {0, 1, NaN}
+        stats: dict with label distribution info
+    """
+    n = len(close)
+    labels = np.full(n, np.nan, dtype=np.float32)
+
+    # Vol scaling (still applied — scales TP/SL with current market vol)
+    vol_window = 30
+    log_returns = np.diff(np.log(close))
+    rolling_vol = np.full(n, np.nan)
+    lr_series = pd.Series(log_returns)
+    rolling_std = lr_series.rolling(window=vol_window, min_periods=vol_window).std().values
+    rolling_vol[vol_window + 1:] = rolling_std[vol_window:]
+
+    valid_vol = rolling_vol[~np.isnan(rolling_vol)]
+    if len(valid_vol) == 0:
+        return labels, {"error": "no valid vol"}
+    median_vol = np.median(valid_vol)
+    if median_vol < 1e-10:
+        median_vol = 1e-10
+    vol_scale = np.clip(rolling_vol / median_vol, 0.5, 3.0)
+
+    warmup = vol_window + 1
+    max_bars = LABEL_MAX_BARS
+
+    # Stats
+    tp_pct_list = []
+    sl_pct_list = []
+    skipped_nopeaks = 0
+    skipped_nanstruct = 0
+    skipped_novol = 0
+
+    for i in range(warmup, n - 1):
+        if np.isnan(vol_scale[i]):
+            skipped_novol += 1
+            continue
+        if np.isnan(ceiling_dist[i]) or np.isnan(floor_dist[i]) or np.isnan(num_peaks[i]):
+            skipped_nanstruct += 1
+            continue
+        if num_peaks[i] < MIN_PEAKS:
+            skipped_nopeaks += 1
+            continue
+
+        # VP peak distances → percentages
+        ceiling_pct = ceiling_dist[i] * REL_SPAN_PCT  # 0-0.25
+        floor_pct = floor_dist[i] * REL_SPAN_PCT
+
+        # Apply TP/SL ratios and vol scaling
+        tp_pct = ceiling_pct * TP_RATIO * vol_scale[i]
+        sl_pct = floor_pct * SL_RATIO * vol_scale[i]
+
+        # Clip
+        tp_pct = np.clip(tp_pct, TP_MIN, TP_MAX)
+        sl_pct = np.clip(sl_pct, SL_MIN, SL_MAX)
+
+        tp_pct_list.append(tp_pct)
+        sl_pct_list.append(sl_pct)
+
+        # First-hit logic
+        entry = close[i]
+        tp_level = entry * (1 + tp_pct)
+        sl_level = entry * (1 - sl_pct)
+        end = min(i + max_bars, n)
+        future = close[i + 1:end]
+
+        if len(future) == 0:
+            continue
+
+        tp_hits = future >= tp_level
+        sl_hits = future <= sl_level
+        tp_first = np.argmax(tp_hits) if tp_hits.any() else len(future)
+        sl_first = np.argmax(sl_hits) if sl_hits.any() else len(future)
+
+        if tp_first < len(future) or sl_first < len(future):
+            labels[i] = 1.0 if tp_first <= sl_first else 0.0
+
+    stats = {
+        "n_valid": int((~np.isnan(labels)).sum()),
+        "n_label_1": int((labels == 1.0).sum()),
+        "n_label_0": int((labels == 0.0).sum()),
+        "n_skipped_nopeaks": skipped_nopeaks,
+        "n_skipped_nanstruct": skipped_nanstruct,
+        "n_skipped_novol": skipped_novol,
+        "tp_pct_mean": float(np.mean(tp_pct_list)) if tp_pct_list else 0,
+        "tp_pct_median": float(np.median(tp_pct_list)) if tp_pct_list else 0,
+        "tp_pct_std": float(np.std(tp_pct_list)) if tp_pct_list else 0,
+        "sl_pct_mean": float(np.mean(sl_pct_list)) if sl_pct_list else 0,
+        "sl_pct_median": float(np.median(sl_pct_list)) if sl_pct_list else 0,
+        "sl_pct_std": float(np.std(sl_pct_list)) if sl_pct_list else 0,
+    }
+    return labels, stats
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Dataset
+# ═══════════════════════════════════════════════════════════════════
+class FastDataset(Dataset):
+    def __init__(self, features, labels, regime=None, lookback=LOOKBACK_BARS_MODEL):
+        self.features = features
+        self.labels = labels
+        self.regime = regime
+        self.lookback = lookback
+        max_start = len(features) - lookback
+        if max_start <= 0:
+            self.valid_indices = np.array([], dtype=np.int64)
+        else:
+            candidates = np.arange(max_start)
+            label_indices = candidates + lookback - 1
+            valid_mask = (label_indices < len(labels)) & ~torch.isnan(labels[label_indices]).numpy()
+            self.valid_indices = candidates[valid_mask]
+
+    def get_regime(self, idx):
+        if self.regime is None:
+            return np.nan
+        real_idx = self.valid_indices[idx]
+        li = real_idx + self.lookback - 1
+        return self.regime[li] if li < len(self.regime) else np.nan
+
+    def __len__(self):
+        return len(self.valid_indices)
+
+    def __getitem__(self, idx):
+        real_idx = self.valid_indices[idx]
+        x = self.features[real_idx:real_idx + self.lookback]
+        y = self.labels[real_idx + self.lookback - 1]
+        return x, y
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Training
+# ═══════════════════════════════════════════════════════════════════
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def make_loader(ds, batch_size, shuffle=False):
+    use_cuda = torch.cuda.is_available()
+    return DataLoader(
+        ds, batch_size=batch_size, shuffle=shuffle,
+        num_workers=NUM_WORKERS if use_cuda else 0,
+        pin_memory=use_cuda,
+        persistent_workers=use_cuda and NUM_WORKERS > 0,
+    )
+
+
+def smooth_labels(y: torch.Tensor, smoothing: float) -> torch.Tensor:
+    """Apply label smoothing: 0 → smoothing, 1 → 1 - smoothing."""
+    return y * (1 - smoothing) + 0.5 * smoothing
+
+
+def train_fold(model, train_loader, val_loader, device, use_amp=False):
+    """Train v6-prime with regularization overhaul."""
+    # Compute pos_weight for class balance
+    all_labels = torch.cat([y for _, y in train_loader])
+    n_pos = all_labels.sum().item()
+    n_neg = len(all_labels) - n_pos
+    pos_weight = torch.tensor([n_neg / max(n_pos, 1)], device=device)
+
+    model = model.to(device)
+    # AdamW with weight decay (proper L2)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY
+    )
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    amp_dtype = torch.bfloat16 if (use_amp and torch.cuda.is_bf16_supported()) else torch.float16
+
+    best_val_loss = float("inf")
+    best_state = None
+    epochs_no_improve = 0
+
+    for epoch in range(1, EPOCHS + 1):
+        model.train()
+        train_loss_sum = 0.0
+        train_correct = 0
+        train_total = 0
+
+        for x, y in train_loader:
+            x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+            # Apply label smoothing
+            y_smooth = smooth_labels(y, LABEL_SMOOTHING)
+            optimizer.zero_grad(set_to_none=True)
+
+            with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
+                logits = model(x)
+                loss = criterion(logits, y_smooth)
+
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+
+            train_loss_sum += loss.item() * len(y)
+            preds = (logits.detach() > 0).float()
+            train_correct += (preds == y).sum().item()  # Accuracy on hard labels
+            train_total += len(y)
+
+        train_loss = train_loss_sum / train_total
+        train_acc = train_correct / train_total
+
+        model.eval()
+        val_loss_sum = 0.0
+        val_correct = 0
+        val_total = 0
+
+        with torch.no_grad():
+            for x, y in val_loader:
+                x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+                y_smooth = smooth_labels(y, LABEL_SMOOTHING)
+                with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
+                    logits = model(x)
+                    loss = criterion(logits, y_smooth)
+                val_loss_sum += loss.item() * len(y)
+                preds = (logits > 0).float()
+                val_correct += (preds == y).sum().item()
+                val_total += len(y)
+
+        val_loss = val_loss_sum / max(val_total, 1)
+        val_acc = val_correct / max(val_total, 1)
+
+        if epoch % 5 == 0 or epoch == 1:
+            print(f"    Epoch {epoch:3d} | Train {train_acc:.4f} | Val {val_acc:.4f} | Val Loss {val_loss:.4f}")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= EARLY_STOP_PATIENCE:
+                print(f"    Early stop at epoch {epoch} (best val_loss at epoch {epoch - epochs_no_improve})")
+                break
+
+    if best_state:
+        model.load_state_dict(best_state)
+    model = model.to(device)
+    return model, epoch
+
+
+def evaluate_fold(model, test_loader, device, use_amp=False):
+    amp_dtype = torch.bfloat16 if (use_amp and torch.cuda.is_bf16_supported()) else torch.float16
+    model.eval()
+    all_preds, all_labels = [], []
+    with torch.no_grad():
+        for x, y in test_loader:
+            x = x.to(device, non_blocking=True)
+            with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
+                logits = model(x)
+            preds = (logits.cpu() > 0).float()
+            all_preds.extend(preds.tolist())
+            all_labels.extend(y.tolist())
+    return np.array(all_preds), np.array(all_labels)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Model builder
+# ═══════════════════════════════════════════════════════════════════
+def build_v6_prime():
+    return TemporalEnrichedV6Prime(
+        ohlc_open_idx=feature_index_v1("ohlc_open_ratio"),
+        ohlc_high_idx=feature_index_v1("ohlc_high_ratio"),
+        ohlc_low_idx=feature_index_v1("ohlc_low_ratio"),
+        log_return_idx=feature_index_v1("log_return"),
+        volume_ratio_idx=feature_index_v1("volume_ratio"),
+        vp_structure_start_idx=feature_index_v1("vp_ceiling_dist"),
+        n_vp_structure=len(VP_STRUCTURE_COLS_V1),
+        n_other_features=len(DERIVED_FEATURE_COLS_V1) + len(VP_STRUCTURE_COLS_V1),
+        dropout=DROPOUT,
+    )
+
+
+def count_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Main
+# ═══════════════════════════════════════════════════════════════════
+def main():
+    device = get_device()
+    use_amp = device.type == "cuda"
+    print(f"Device: {device}")
+    if device.type == "cuda":
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"bf16 support: {torch.cuda.is_bf16_supported()}")
+
+    print(f"\nConfig:")
+    print(f"  Labels: VP-derived TP/SL (TP_RATIO={TP_RATIO}, SL_RATIO={SL_RATIO})")
+    print(f"  Clip: TP [{TP_MIN*100}%, {TP_MAX*100}%], SL [{SL_MIN*100}%, {SL_MAX*100}%]")
+    print(f"  Regularization: dropout={DROPOUT}, weight_decay={WEIGHT_DECAY}, label_smoothing={LABEL_SMOOTHING}")
+    print(f"  Optimizer: AdamW, LR={LR}")
+    print(f"  Batch: {BATCH_SIZE}")
+
+    # ─── Load data ───
+    t0 = time.time()
+    print("\nLoading v1 features...")
+    df = build_feature_matrix_v1()
+    print(f"  {len(df)} rows, {len(FEATURE_COLS_V1)} features")
+
+    # ─── Compute VP-derived labels ───
+    print("\nComputing VP-derived labels...")
+    labels, label_stats = precompute_vp_labels(
+        close=df["close"].values,
+        ceiling_dist=df["vp_ceiling_dist"].values,
+        floor_dist=df["vp_floor_dist"].values,
+        num_peaks=df["vp_num_peaks"].values,
+    )
+    print(f"  Valid labels: {label_stats['n_valid']:,}")
+    print(f"  Label 1: {label_stats['n_label_1']:,} ({label_stats['n_label_1']/max(label_stats['n_valid'],1)*100:.1f}%)")
+    print(f"  Label 0: {label_stats['n_label_0']:,} ({label_stats['n_label_0']/max(label_stats['n_valid'],1)*100:.1f}%)")
+    print(f"  Skipped (no peaks): {label_stats['n_skipped_nopeaks']:,}")
+    print(f"  Skipped (NaN structure): {label_stats['n_skipped_nanstruct']:,}")
+    print(f"  TP pct: mean={label_stats['tp_pct_mean']*100:.2f}%, median={label_stats['tp_pct_median']*100:.2f}%, std={label_stats['tp_pct_std']*100:.2f}%")
+    print(f"  SL pct: mean={label_stats['sl_pct_mean']*100:.2f}%, median={label_stats['sl_pct_median']*100:.2f}%, std={label_stats['sl_pct_std']*100:.2f}%")
+
+    regime = build_regime_array(df["date"].values)
+    print(f"  Data loaded in {time.time() - t0:.1f}s")
+
+    # Convert
+    features = torch.from_numpy(df[FEATURE_COLS_V1].values.astype(np.float32))
+    labels_t = torch.from_numpy(labels)
+    dates = pd.to_datetime(df["date"]).values
+
+    # ─── Walk-forward ───
+    all_preds, all_labels, all_regimes = [], [], []
+    fold_results = []
+
+    print(f"\nStarting walk-forward...")
+    total_start = time.time()
+
+    for i in range(len(FOLD_BOUNDARIES) - 2):
+        fold_start = time.time()
+        train_end = pd.Timestamp(FOLD_BOUNDARIES[i])
+        val_end = pd.Timestamp(FOLD_BOUNDARIES[i + 1])
+        test_end = pd.Timestamp(FOLD_BOUNDARIES[i + 2])
+
+        train_mask = dates < train_end
+        val_mask = (dates >= train_end) & (dates < val_end)
+        test_mask = (dates >= val_end) & (dates < test_end)
+
+        if train_mask.sum() < 1000 or val_mask.sum() < 100 or test_mask.sum() < 100:
+            continue
+
+        train_idx = np.where(train_mask)[0]
+        val_idx = np.where(val_mask)[0]
+        test_idx = np.where(test_mask)[0]
+
+        train_ds = FastDataset(
+            features[train_idx[0]:train_idx[-1]+1],
+            labels_t[train_idx[0]:train_idx[-1]+1],
+        )
+        val_ds = FastDataset(
+            features[val_idx[0]:val_idx[-1]+1],
+            labels_t[val_idx[0]:val_idx[-1]+1],
+        )
+        test_ds = FastDataset(
+            features[test_idx[0]:test_idx[-1]+1],
+            labels_t[test_idx[0]:test_idx[-1]+1],
+            regime[test_idx[0]:test_idx[-1]+1],
+        )
+
+        if len(train_ds) < 100 or len(val_ds) < 50 or len(test_ds) < 50:
+            continue
+
+        train_loader = make_loader(train_ds, BATCH_SIZE, shuffle=True)
+        val_loader = make_loader(val_ds, BATCH_SIZE)
+        test_loader = make_loader(test_ds, BATCH_SIZE)
+
+        print(f"\n  Fold {i + 1} ({FOLD_BOUNDARIES[i + 1]} → {FOLD_BOUNDARIES[i + 2]})")
+        print(f"    Train: {len(train_ds)}  Val: {len(val_ds)}  Test: {len(test_ds)}")
+
+        model = build_v6_prime()
+        if USE_COMPILE and hasattr(torch, "compile"):
+            try:
+                model = torch.compile(model)
+            except Exception:
+                pass
+
+        model, epochs_run = train_fold(model, train_loader, val_loader, device, use_amp)
+        preds, fold_labels = evaluate_fold(model, test_loader, device, use_amp)
+
+        fold_regimes = np.array([test_ds.get_regime(j) for j in range(len(test_ds))])
+
+        fold_acc = (preds == fold_labels).mean()
+        fold_time = time.time() - fold_start
+
+        fold_results.append({
+            "fold": i + 1,
+            "period": f"{FOLD_BOUNDARIES[i + 1]} → {FOLD_BOUNDARIES[i + 2]}",
+            "acc": float(fold_acc),
+            "n_test": len(preds),
+            "epochs_run": epochs_run,
+            "time_sec": round(fold_time, 1),
+        })
+        all_preds.extend(preds.tolist())
+        all_labels.extend(fold_labels.tolist())
+        all_regimes.extend(fold_regimes.tolist())
+
+        print(f"    Acc: {fold_acc:.4f}, epochs={epochs_run}, {fold_time:.0f}s")
+
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    total_time = time.time() - total_start
+
+    # ─── Overall stats ───
+    preds = np.array(all_preds)
+    labels = np.array(all_labels)
+    regimes = np.array(all_regimes)
+
+    def confusion(p, l):
+        tp = int(((p == 1) & (l == 1)).sum())
+        fp = int(((p == 1) & (l == 0)).sum())
+        tn = int(((p == 0) & (l == 0)).sum())
+        fn = int(((p == 0) & (l == 1)).sum())
+        prec = tp / max(tp + fp, 1)
+        npv = tn / max(tn + fn, 1)
+        acc = (tp + tn) / max(len(p), 1)
+        return {"tp": tp, "fp": fp, "tn": tn, "fn": fn,
+                "precision": round(prec, 4), "npv": round(npv, 4),
+                "accuracy": round(acc, 4), "n": len(p)}
+
+    overall = confusion(preds, labels)
+    bull = regimes == 1.0
+    bear = regimes == 0.0
+    bull_stats = confusion(preds[bull], labels[bull]) if bull.sum() > 0 else None
+    bear_stats = confusion(preds[bear], labels[bear]) if bear.sum() > 0 else None
+
+    # EV (using REFERENCE 7.5/3 ratios — note: labels are per-sample, this is approximate)
+    regime_ev = {}
+    if bull_stats:
+        regime_ev["bull_long"] = round(bull_stats["precision"] * 7.5 - (1 - bull_stats["precision"]) * 3.0, 2)
+        regime_ev["bull_short"] = round(bull_stats["npv"] * 3.0 - (1 - bull_stats["npv"]) * 7.5, 2)
+    if bear_stats:
+        regime_ev["bear_long"] = round(bear_stats["precision"] * 3.0 - (1 - bear_stats["precision"]) * 7.5, 2)
+        regime_ev["bear_short"] = round(bear_stats["npv"] * 7.5 - (1 - bear_stats["npv"]) * 3.0, 2)
+
+    print(f"\n{'=' * 70}")
+    print(f"  v6-PRIME RESULTS (VP-derived labels + regularization)")
+    print(f"{'=' * 70}")
+    print(f"  Total time: {total_time/60:.1f} min")
+    print(f"  Overall: Acc={overall['accuracy']:.4f}  Prec={overall['precision']:.4f}  NPV={overall['npv']:.4f}")
+    print(f"  TP={overall['tp']} FP={overall['fp']} TN={overall['tn']} FN={overall['fn']}")
+    print(f"\n  Per-fold:")
+    for fr in fold_results:
+        print(f"    Fold {fr['fold']:<3} {fr['period']:<30} {fr['acc']*100:6.1f}% ({fr['epochs_run']} epochs, {fr['n_test']} samples)")
+
+    if bull_stats:
+        print(f"\n  BULL ({bull_stats['n']} bars): Prec={bull_stats['precision']:.4f}  NPV={bull_stats['npv']:.4f}")
+        print(f"    Long EV (ref 7.5/3): {regime_ev.get('bull_long', 0):+.2f}%")
+    if bear_stats:
+        print(f"\n  BEAR ({bear_stats['n']} bars): Prec={bear_stats['precision']:.4f}  NPV={bear_stats['npv']:.4f}")
+        print(f"    Long EV (ref 7.5/3): {regime_ev.get('bear_long', 0):+.2f}%  Short EV: {regime_ev.get('bear_short', 0):+.2f}%")
+
+    print(f"\n  Note: EV is approximate — labels are per-sample TP/SL, not fixed 7.5/3")
+
+    # Save
+    output = {
+        "config": {
+            "model": "v6-prime (TemporalEnrichedV6Prime)",
+            "labels": "VP-derived TP/SL",
+            "tp_ratio": TP_RATIO,
+            "sl_ratio": SL_RATIO,
+            "tp_range": [TP_MIN, TP_MAX],
+            "sl_range": [SL_MIN, SL_MAX],
+            "min_peaks": MIN_PEAKS,
+            "dropout": DROPOUT,
+            "weight_decay": WEIGHT_DECAY,
+            "label_smoothing": LABEL_SMOOTHING,
+            "optimizer": "AdamW",
+            "lr": LR,
+            "batch_size": BATCH_SIZE,
+        },
+        "label_stats": label_stats,
+        "overall": overall,
+        "bull_stats": bull_stats,
+        "bear_stats": bear_stats,
+        "regime_ev": regime_ev,
+        "folds": fold_results,
+        "total_time_min": round(total_time / 60, 1),
+    }
+    out_path = EXPERIMENTS_DIR / "eval_v6_prime_results.json"
+    EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump(output, f, indent=2)
+    print(f"\nResults saved to {out_path}")
+
+
+if __name__ == "__main__":
+    main()
