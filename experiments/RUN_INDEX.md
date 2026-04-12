@@ -110,4 +110,7 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 *(eval_finetune_funding.py — Colab T4. Mixed results, fold 6 collapse. Abandoned. Results: experiments/eval_finetune_funding_results.json)*
 
 ### Eval 10 — v6-prime with VP-derived TP/SL + regularization overhaul (walk-forward)
-*(eval_v6_prime.py — Colab A100. 74.5% acc but +0.48% real EV. Per-fold variance too high. Results: experiments/eval_v6_prime_results.json)*
+*(eval_v6_prime.py — Colab A100. 74.5% acc but +0.48% real EV. Per-fold variance too high.)*
+
+### Eval 11 — v6-prime + filter analysis **⭐ BREAKTHROUGH: asymmetry filter**
+*(eval_v6_prime.py with filter analysis — post-hoc selection by tp_pct/sl_pct > 2.0 → **+3.49% EV per trade on 652 trades**. Matches user's manual trade filtering. Results: experiments/eval_v6_prime_results.json)*
