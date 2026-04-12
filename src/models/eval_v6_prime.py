@@ -374,18 +374,21 @@ def train_fold(model, train_loader, val_loader, device, use_amp=False):
 
 
 def evaluate_fold(model, test_loader, device, use_amp=False):
+    """Return predictions, labels, and raw logits for confidence filtering."""
     amp_dtype = torch.bfloat16 if (use_amp and torch.cuda.is_bf16_supported()) else torch.float16
     model.eval()
-    all_preds, all_labels = [], []
+    all_preds, all_labels, all_logits = [], [], []
     with torch.no_grad():
         for x, y in test_loader:
             x = x.to(device, non_blocking=True)
             with torch.amp.autocast("cuda", enabled=use_amp, dtype=amp_dtype):
                 logits = model(x)
-            preds = (logits.cpu() > 0).float()
+            logits_cpu = logits.float().cpu()
+            preds = (logits_cpu > 0).float()
             all_preds.extend(preds.tolist())
             all_labels.extend(y.tolist())
-    return np.array(all_preds), np.array(all_labels)
+            all_logits.extend(logits_cpu.tolist())
+    return np.array(all_preds), np.array(all_labels), np.array(all_logits)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -459,7 +462,7 @@ def main():
 
     # ─── Walk-forward ───
     all_preds, all_labels, all_regimes = [], [], []
-    all_tp_pct, all_sl_pct = [], []
+    all_tp_pct, all_sl_pct, all_logits = [], [], []
     fold_results = []
 
     print(f"\nStarting walk-forward...")
@@ -516,7 +519,7 @@ def main():
                 pass
 
         model, epochs_run = train_fold(model, train_loader, val_loader, device, use_amp)
-        preds, fold_labels = evaluate_fold(model, test_loader, device, use_amp)
+        preds, fold_labels, fold_logits = evaluate_fold(model, test_loader, device, use_amp)
 
         fold_regimes = np.array([test_ds.get_regime(j) for j in range(len(test_ds))])
         fold_tp_pct = np.array([test_ds.get_tp_pct(j) for j in range(len(test_ds))])
@@ -554,6 +557,7 @@ def main():
         all_regimes.extend(fold_regimes.tolist())
         all_tp_pct.extend(fold_tp_pct.tolist())
         all_sl_pct.extend(fold_sl_pct.tolist())
+        all_logits.extend(fold_logits.tolist())
 
         print(f"    Acc: {fold_acc:.4f}, epochs={epochs_run}, {fold_time:.0f}s")
         print(f"    Long trades: {int(n_long)}, Real EV/trade: {fold_long_ev:+.3f}%")
@@ -570,6 +574,8 @@ def main():
     regimes = np.array(all_regimes)
     tp_pct_all = np.array(all_tp_pct)
     sl_pct_all = np.array(all_sl_pct)
+    logits_all = np.array(all_logits)
+    probs_all = 1.0 / (1.0 + np.exp(-logits_all))   # sigmoid
 
     def confusion(p, l):
         tp = int(((p == 1) & (l == 1)).sum())
@@ -680,6 +686,78 @@ def main():
         regime_ev["bear_long_fake"] = round(bear_stats["precision"] * 3.0 - (1 - bear_stats["precision"]) * 7.5, 2)
         regime_ev["bear_short_fake"] = round(bear_stats["npv"] * 7.5 - (1 - bear_stats["npv"]) * 3.0, 2)
 
+    # ═══════════════════════════════════════════════════════════════════
+    # Filter analysis — try different selection strategies
+    # ═══════════════════════════════════════════════════════════════════
+    print(f"\n{'=' * 70}")
+    print(f"  FILTER ANALYSIS — long-only, filtered")
+    print(f"{'=' * 70}")
+
+    def compute_filtered_ev(filter_mask):
+        """Compute long EV for samples matching filter (must still be pred=1)."""
+        m = filter_mask & (preds == 1)
+        if m.sum() == 0:
+            return 0.0, 0
+        wins = m & (labels == 1)
+        losses = m & (labels == 0)
+        ev = (tp_pct_all[wins].sum() - sl_pct_all[losses].sum()) / m.sum() * 100
+        return float(ev), int(m.sum())
+
+    filter_results = {}
+
+    # 1. Raw confidence thresholds
+    print(f"\n  (A) Raw confidence (sigmoid(logit) > threshold):")
+    print(f"  {'Threshold':<12} {'Trades':>9} {'EV/trade':>12} {'Annual freq*':>14}")
+    for th in [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]:
+        mask = probs_all > th
+        ev, n = compute_filtered_ev(mask)
+        annual = n / (len(preds) / 8760) if len(preds) > 0 else 0   # 1h bars → trades/year
+        filter_results[f"conf_{th}"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
+        print(f"  {th:<12} {n:>9,} {ev:>+11.3f}% {annual:>13.0f}/y")
+
+    # 2. Expected EV filter (only trade when expected return is positive)
+    print(f"\n  (B) Expected EV filter (P(tp)*tp - P(sl)*sl > threshold):")
+    print(f"  {'EV threshold':<14} {'Trades':>9} {'EV/trade':>12}")
+    expected_ev = probs_all * tp_pct_all - (1 - probs_all) * sl_pct_all
+    for th in [0.00, 0.01, 0.02, 0.03, 0.04, 0.05]:
+        mask = expected_ev > th
+        ev, n = compute_filtered_ev(mask)
+        filter_results[f"expev_{th}"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
+        print(f"  {th:<14} {n:>9,} {ev:>+11.3f}%")
+
+    # 3. Asymmetry filter (only trade when tp > ratio × sl)
+    print(f"\n  (C) Asymmetry filter (tp_pct / sl_pct > ratio):")
+    print(f"  {'Ratio':<8} {'Trades':>9} {'EV/trade':>12}")
+    safe_ratio = tp_pct_all / np.clip(sl_pct_all, 1e-8, None)
+    for ratio in [1.0, 1.5, 2.0, 2.5, 3.0]:
+        mask = safe_ratio > ratio
+        ev, n = compute_filtered_ev(mask)
+        filter_results[f"asym_{ratio}"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
+        print(f"  {ratio:<8} {n:>9,} {ev:>+11.3f}%")
+
+    # 4. Combined: high confidence AND favorable asymmetry
+    print(f"\n  (D) Combined (confidence > 0.65 AND tp/sl > 1.5):")
+    mask = (probs_all > 0.65) & (safe_ratio > 1.5)
+    ev, n = compute_filtered_ev(mask)
+    filter_results["combined_65_15"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
+    print(f"  {n:,} trades, EV = {ev:+.3f}% per trade")
+
+    # 5. Combined: high confidence AND positive expected EV
+    print(f"\n  (E) Combined (confidence > 0.65 AND expected EV > 0.02):")
+    mask = (probs_all > 0.65) & (expected_ev > 0.02)
+    ev, n = compute_filtered_ev(mask)
+    filter_results["combined_65_exev02"] = {"n_trades": n, "ev_per_trade": round(ev, 3)}
+    print(f"  {n:,} trades, EV = {ev:+.3f}% per trade")
+
+    # Logit distribution diagnostic
+    print(f"\n  Logit distribution:")
+    print(f"    Mean:   {logits_all.mean():+.3f}")
+    print(f"    Std:    {logits_all.std():.3f}")
+    print(f"    Median: {np.median(logits_all):+.3f}")
+    print(f"    Q25/Q75: {np.percentile(logits_all, 25):+.3f} / {np.percentile(logits_all, 75):+.3f}")
+    print(f"    Q10/Q90: {np.percentile(logits_all, 10):+.3f} / {np.percentile(logits_all, 90):+.3f}")
+    print(f"  Softer distribution = better calibration. Label smoothing should keep |logit| small.")
+
     # Save
     output = {
         "config": {
@@ -710,6 +788,16 @@ def main():
             **real_regime_ev,
         },
         "legacy_regime_ev_fake": regime_ev,
+        "filter_results": filter_results,
+        "logit_stats": {
+            "mean": float(logits_all.mean()),
+            "std": float(logits_all.std()),
+            "median": float(np.median(logits_all)),
+            "q10": float(np.percentile(logits_all, 10)),
+            "q25": float(np.percentile(logits_all, 25)),
+            "q75": float(np.percentile(logits_all, 75)),
+            "q90": float(np.percentile(logits_all, 90)),
+        },
         "folds": fold_results,
         "total_time_min": round(total_time / 60, 1),
     }
