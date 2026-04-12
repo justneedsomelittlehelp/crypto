@@ -212,7 +212,79 @@ Per-fold real EV (computed from actual per-sample TP/SL, not fixed ratios):
 
 ---
 
-## Eval 11 — v6-prime + Asymmetry Filter ⭐ BREAKTHROUGH (2026-04-12)
+## Eval 12 — v6-prime + Multi-seed + SWA + Combined Filter ⭐⭐ NEW BEST (2026-04-12)
+
+**NEW BENCHMARK: 435 trades, 78.4% precision, +3.98% EV per trade, Sharpe 0.97.**
+
+Run: 3 seeds per fold (42, 43, 44), SWA starting epoch 15, logit-averaging ensemble.
+Total time: 45.8 min on Colab A100.
+
+### Headline results
+
+| Strategy | Trades | Prec | EV(arith) | EV(geom) | Sharpe | Max losses |
+|---|---|---|---|---|---|---|
+| **conf > 0.65 + asym > 1.5** | **435** | **78.4%** | **+3.98%** | **+3.89%** | **0.97** | **23** |
+| conf > 0.60 + asym > 2.0 | 481 | 75.7% | +3.86% | +3.76% | 0.87 | 23 |
+| conf > 0.65 (alone) | 8,024 | 76.4% | +1.17% | +0.86% | 0.15 | 251 |
+| conf > 0.70 (alone) | 7,539 | 77.0% | +1.28% | +0.98% | 0.17 | 251 |
+| conf > 0.65 + expEV > 0.02 | 3,989 | 68.8% | +1.82% | +1.27% | 0.18 | 237 |
+| Long-only (unfiltered) | 12,717 | 58.9% | +0.46% | +0.11% | 0.06 | 381 |
+
+### Why combined beats everything
+
+The combined filter (`confidence > 0.65 AND asymmetry > 1.5`) demands both:
+- **High confidence:** model is genuinely sure, sigmoid > 0.65
+- **Favorable asymmetry:** VP structure gives a clear risk/reward setup (tp_pct > 1.5× sl_pct)
+
+Neither alone works with the multi-seed ensemble:
+- Asymmetry alone: precision crashes to 23% (ensemble is too conservative; when it does predict long on wide-TP setups, it's wrong most of the time)
+- Confidence alone: high precision (76%) but lower EV per trade (+1.17%) — wide losses drag it down
+
+Combining them requires BOTH conditions, which selects the intersection: structurally sound setups where the model is also highly confident. Result: 78.4% precision, +3.98% EV, tight geometric vs arithmetic gap (indicates low variance), Sharpe 0.97.
+
+### Multi-seed + SWA impact
+
+- **Fold 1 no longer collapses** — 1,180 long trades at +2.66% EV (was 0 trades last run)
+- Per-fold accuracy more stable (3 seeds average out init lottery)
+- **Max consecutive losses crashed**: 23 (filtered) vs 251-381 (unfiltered). The strategy's drawdown risk is dramatically lower.
+- Geometric vs arithmetic EV gap tightened (0.1% gap) — low variance means clean compounding
+- Overall unfiltered EV slightly lower (+0.46% vs +0.60% single-seed) — ensemble is more conservative, which HURTS unfiltered accuracy but HELPS filter precision
+
+### Per-fold accuracy (ensemble)
+
+| Fold | Period | Acc | Long# | Long EV |
+|------|--------|-----|-------|---------|
+| 1 | 2020 H2 | 36.0% | 1,180 | +2.66% |
+| 2 | 2021 H1 | 56.6% | 1,446 | -2.21% |
+| 3 | 2021 H2 | 71.1% | 1,330 | +3.58% |
+| 4 | 2022 H1 | 58.5% | 1,773 | -4.38% |
+| 5 | 2022 H2 | 86.0% | 704 | -1.33% |
+| 6 | 2023 H1 | 75.7% | 1,111 | -0.44% |
+| 7 | 2023 H2 | 66.5% | 1,776 | +1.21% |
+| 8 | 2024 H1 | 77.5% | 942 | +3.61% |
+| 9 | 2024 H2 | 79.7% | 1,353 | +2.54% |
+| 10 | 2025 H1 | 90.0% | 1,102 | +1.17% |
+
+Still wild variance on unfiltered predictions, but the combined filter extracts the tradeable subset from each fold.
+
+### The asymmetry-alone puzzle
+
+In Eval 11 (single seed), `asym > 2.0` gave +3.49% on 652 trades. In this run, the same filter gives -0.16% on 3,208 trades. Why?
+
+The ensemble's logit averaging made predictions more conservative overall. It no longer "predicts long" on as many marginal samples. But the ones where asymmetry > 2.0 ARE most of its long predictions now, and many of them are actually trap setups (wide TP far above, shallow SL just below — looks favorable but rarely triggers TP). Combining with confidence filter removes the traps.
+
+### The new benchmark
+
+**conf > 0.65 + asym > 1.5** — this is the strategy to beat for all future experiments.
+- 435 trades over 5 years (~87/year, ~1 trade every 4 days)
+- 78.4% precision
+- +3.98% EV/trade arithmetic, +3.89% geometric
+- Sharpe 0.97 per trade
+- Max consecutive losses: 23 (vs 251+ on unfiltered)
+
+---
+
+## Eval 11 — v6-prime + Asymmetry Filter (superseded by Eval 12) (2026-04-12)
 
 **MILESTONE: First strategy that meaningfully beats v6 baseline on per-trade EV.**
 

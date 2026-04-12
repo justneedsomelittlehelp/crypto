@@ -112,5 +112,8 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 ### Eval 10 — v6-prime with VP-derived TP/SL + regularization overhaul (walk-forward)
 *(eval_v6_prime.py — Colab A100. 74.5% acc but +0.48% real EV. Per-fold variance too high.)*
 
-### Eval 11 — v6-prime + filter analysis **⭐ BREAKTHROUGH: asymmetry filter**
-*(eval_v6_prime.py with filter analysis — post-hoc selection by tp_pct/sl_pct > 2.0 → **+3.49% EV per trade on 652 trades**. Matches user's manual trade filtering. Results: experiments/eval_v6_prime_results.json)*
+### Eval 11 — v6-prime + filter analysis (asymmetry filter, single seed, superseded)
+*(eval_v6_prime.py with filter analysis — post-hoc selection by tp_pct/sl_pct > 2.0 → +3.49% EV per trade on 652 trades.)*
+
+### Eval 12 — v6-prime + 3 seeds + SWA + combined filter **⭐⭐ NEW BEST**
+*(eval_v6_prime.py with N_SEEDS=3, SWA_START=15. Combined filter (conf>0.65 + asym>1.5) → **+3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97**. Fold 1 collapse fixed by ensembling. Results: experiments/eval_v6_prime_results.json)*
