@@ -491,7 +491,10 @@ def main():
     # ─── Walk-forward ───
     all_preds, all_labels, all_regimes = [], [], []
     all_tp_pct, all_sl_pct, all_logits = [], [], []
+    all_dates, all_close = [], []     # For backtest caching
     fold_results = []
+
+    close_prices = df["close"].values.astype(np.float64)
 
     print(f"\nStarting walk-forward...")
     total_start = time.time()
@@ -579,6 +582,15 @@ def main():
         fold_tp_pct = np.array([test_ds.get_tp_pct(j) for j in range(len(test_ds))])
         fold_sl_pct = np.array([test_ds.get_sl_pct(j) for j in range(len(test_ds))])
 
+        # Absolute bar indices in df (for date/close lookup)
+        test_slice_start = test_idx[0]
+        fold_bar_idx = np.array([
+            test_slice_start + test_ds.valid_indices[j] + test_ds.lookback - 1
+            for j in range(len(test_ds))
+        ])
+        fold_dates = dates[fold_bar_idx]
+        fold_close = close_prices[fold_bar_idx]
+
         fold_acc = (preds == fold_labels).mean()
         fold_time = time.time() - fold_start
 
@@ -613,6 +625,8 @@ def main():
         all_tp_pct.extend(fold_tp_pct.tolist())
         all_sl_pct.extend(fold_sl_pct.tolist())
         all_logits.extend(fold_logits.tolist())
+        all_dates.extend(fold_dates.tolist())
+        all_close.extend(fold_close.tolist())
 
         print(f"    [Ensemble] Acc: {fold_acc:.4f} ({N_SEEDS} seeds, {total_epochs_run} total epochs, {fold_time:.0f}s)")
         print(f"    Long trades: {int(n_long)}, Real EV/trade: {fold_long_ev:+.3f}%")
@@ -938,6 +952,23 @@ def main():
     with open(out_path, "w") as f:
         json.dump(output, f, indent=2)
     print(f"\nResults saved to {out_path}")
+
+    # Save predictions cache for backtest engine
+    predictions_path = EXPERIMENTS_DIR / "v6_prime_predictions.npz"
+    dates_iso = np.array([pd.Timestamp(d).isoformat() for d in all_dates], dtype=object)
+    np.savez(
+        predictions_path,
+        dates=dates_iso,
+        close=np.array(all_close, dtype=np.float64),
+        logits=logits_all,
+        probs=probs_all,
+        preds=preds.astype(np.int8),
+        labels=labels.astype(np.int8),
+        tp_pct=tp_pct_all,
+        sl_pct=sl_pct_all,
+        regimes=regimes,
+    )
+    print(f"Predictions cache saved to {predictions_path}")
 
 
 if __name__ == "__main__":
