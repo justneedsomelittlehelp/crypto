@@ -169,7 +169,9 @@ class Portfolio:
         Unrealized P&L = (current_price - entry_price) × btc_amount × direction.
 
         Also checks DD circuit breaker — if dd exceeds threshold AND breaker not
-        already active, trigger time-based pause.
+        already paused, trigger time-based pause. When the pause expires, the
+        peak_equity is reset to current equity so the strategy gets a "fresh start"
+        baseline (otherwise it would immediately re-trigger because dd is still bad).
         """
         position_value = 0.0
         for p in self.open_positions:
@@ -177,7 +179,13 @@ class Portfolio:
             position_value += p.size_dollars + unrealized_pnl
         self.equity = self.cash + position_value
 
-        # Track peak for drawdown calculation
+        # If we just exited a pause, reset peak to current equity (fresh baseline)
+        if (self.cfg.circuit_breaker_dd > 0 and bar_idx >= 0
+                and self.dd_breaker_until_bar > 0
+                and bar_idx == self.dd_breaker_until_bar):
+            self.peak_equity = self.equity
+
+        # Track peak for drawdown calculation (will be max(reset_value, growing equity))
         if self.equity > self.peak_equity:
             self.peak_equity = self.equity
 
