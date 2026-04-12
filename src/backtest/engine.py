@@ -58,8 +58,8 @@ class BacktestConfig:
     liquidation_threshold: float = 0.95  # Liquidate at 95% loss of margin
 
     # Risk circuit breakers
-    circuit_breaker_dd: float = 0.0    # 0 = disabled. Pause new entries if dd exceeds this fraction (e.g., 0.15 = 15%)
-    circuit_breaker_dd_reset: float = 0.0  # Resume when dd recovers above this (e.g., 0.08 = 8%)
+    circuit_breaker_dd: float = 0.0    # 0 = disabled. Pause new entries if dd exceeds this fraction
+    circuit_breaker_pause_bars: int = 0  # Time-based pause after dd breaker triggers (e.g., 720 = 30 days)
     max_consec_losses: int = 0         # 0 = disabled. Trigger killswitch after N consecutive losses
     killswitch_pause_bars: int = 0     # Pause duration after killswitch (in bars)
 
@@ -129,9 +129,10 @@ class Portfolio:
         self.signals_skipped_filter = 0
         self.signals_skipped_breaker = 0
         # Circuit breaker state
-        self.dd_breaker_active = False
+        self.dd_breaker_until_bar = -1   # Pause new entries until this bar (DD breaker)
         self.consecutive_losses = 0
         self.killswitch_until_bar = -1
+        self.dd_breaker_triggers = 0     # Count how many times DD breaker fired
 
     def available_capital(self) -> float:
         """Capital available for new positions = (equity × (1 - reserve_pct)) - committed."""
@@ -161,11 +162,14 @@ class Portfolio:
         else:
             return avail * self.cfg.position_size_pct
 
-    def update_equity(self, current_price: float):
+    def update_equity(self, current_price: float, bar_idx: int = -1):
         """Mark-to-market: equity = cash + margin value of open positions.
 
         For leveraged positions, the margin value = original margin + unrealized P&L.
         Unrealized P&L = (current_price - entry_price) × btc_amount × direction.
+
+        Also checks DD circuit breaker — if dd exceeds threshold AND breaker not
+        already active, trigger time-based pause.
         """
         position_value = 0.0
         for p in self.open_positions:
@@ -173,25 +177,21 @@ class Portfolio:
             position_value += p.size_dollars + unrealized_pnl
         self.equity = self.cash + position_value
 
-        # Track peak for drawdown circuit breaker
+        # Track peak for drawdown calculation
         if self.equity > self.peak_equity:
             self.peak_equity = self.equity
 
-        # Update drawdown breaker state (check if we should activate or deactivate)
-        if self.cfg.circuit_breaker_dd > 0:
+        # DD breaker: time-based, fires when dd exceeds threshold
+        if self.cfg.circuit_breaker_dd > 0 and bar_idx >= 0:
             current_dd = (self.equity - self.peak_equity) / self.peak_equity  # negative
-            if not self.dd_breaker_active:
-                # Activate if current dd worse than threshold
-                if current_dd <= -self.cfg.circuit_breaker_dd:
-                    self.dd_breaker_active = True
-            else:
-                # Reset if current dd recovered above reset threshold
-                if current_dd >= -self.cfg.circuit_breaker_dd_reset:
-                    self.dd_breaker_active = False
+            # Only fire if not already paused
+            if bar_idx >= self.dd_breaker_until_bar and current_dd <= -self.cfg.circuit_breaker_dd:
+                self.dd_breaker_until_bar = bar_idx + self.cfg.circuit_breaker_pause_bars
+                self.dd_breaker_triggers += 1
 
     def is_breaker_active(self, bar_idx: int) -> bool:
         """Returns True if any circuit breaker is currently blocking new entries."""
-        if self.dd_breaker_active:
+        if self.dd_breaker_until_bar > bar_idx:
             return True
         if self.killswitch_until_bar > bar_idx:
             return True
@@ -444,8 +444,8 @@ def run_backtest(
         date = pd.Timestamp(dates[i])
         price = float(close_prices[i])
 
-        # Mark to market
-        portfolio.update_equity(price)
+        # Mark to market (also updates DD breaker state with bar idx)
+        portfolio.update_equity(price, bar_idx=i)
 
         # Try to close existing positions
         portfolio.try_close_positions(i, date, price)
@@ -469,7 +469,7 @@ def run_backtest(
             portfolio._close_position(p, len(dates) - 1, final_date, final_price, "end_of_test")
         portfolio.open_positions = []
 
-    portfolio.update_equity(float(close_prices[-1]))
+    portfolio.update_equity(float(close_prices[-1]), bar_idx=len(dates) - 1)
 
     summary = {
         "n_signals": n_signals,
