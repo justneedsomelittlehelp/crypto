@@ -1,5 +1,7 @@
 # Transformer Evaluations
 
+> **⚠ Audit retraction (2026-04-12).** Evals 11, 12, 17, and 18 in this document reported inflated results caused by a walk-forward label leak (no embargo between folds) and test-set tuning of the post-SL pause. The headline claims from those evals — `+3.49%`/`+3.98%` EV per trade for the asymmetry filter, and the `+34.0% CAGR / −15.1% DD / 72% win rate` "deployable" strategy — do **not** reproduce under clean labels. The honest numbers for the same pipeline are +6.0% CAGR / −18.4% DD / 65% win rate. Do not cite Eval 11/12/17/18 figures as deployable metrics. See `EVAL_AUDIT.md` for the full post-mortem and `MODEL_HISTORY.md` §20 for the retraction summary.
+
 **Why:** Self-attention lets each VP bin attend to all other bins — can directly learn "peak at bin 12 relates to peak at bin 38" without stacking conv layers. Better for finding peak pairs (ceiling/floor).
 **Strategy alignment:** High — attention mechanism matches how user visually scans VP for related peaks. See [STRATEGY.md](STRATEGY.md).
 

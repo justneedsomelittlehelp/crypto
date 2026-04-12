@@ -35,18 +35,18 @@ RESULTS_PATH = EXPERIMENTS_DIR / "backtest_results.json"
 # Filter and sizing variants to test
 # ═══════════════════════════════════════════════════════════════════
 FILTER_VARIANTS = {
-    # Locked to the proven winner: combined_60_20
-    "combined_60_20": {
-        "min_confidence": 0.60,
-        "min_asymmetry": 2.0,
-        "allow_pyramiding": True,
-    },
+    "conf_70_guard": {"min_confidence": 0.70, "min_asymmetry": 1.0, "allow_pyramiding": True},
 }
 
 SIZING_VARIANTS = {
-    # LOCKED: 24h post-SL pause is the deployed parameter. No sweep here —
-    # sweeping on the same data we evaluate on is what invalidated prior runs.
-    "post_sl_24h":   {"sizing_mode": "fixed_pct", "position_size_pct": 1.00, "reserve_pct": 0.0, "leverage": 3.0, "post_sl_pause_bars": 24},
+    # Aggressive: 100% sizing, 3x leverage, 24h pause.
+    "full_3x_pause24": {
+        "sizing_mode": "fixed_pct",
+        "position_size_pct": 1.00,
+        "reserve_pct": 0.0,
+        "leverage": 3.0,
+        "post_sl_pause_bars": 24,
+    },
 }
 
 # Out-of-sample holdout: data the walk-forward never tested on before

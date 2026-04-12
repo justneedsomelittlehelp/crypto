@@ -1,0 +1,46 @@
+======================================================================
+  v6-prime BACKTEST
+======================================================================
+Loaded predictions from /content/crypto/experiments/v6_prime_predictions.npz
+  Total samples: 31243
+  Date range: 2020-08-05T12:00:00 → 2026-04-07T09:00:00
+  Close range: $10,077 → $126,105
+
+Running 1 filters × 1 sizings = 1 backtests...
+
+
+Holdout slice: 3401 bars (2025-07-30T23:00:00 → 2026-04-07T09:00:00)
+  Running: combined_60_20 + post_sl_24h [full]... final=$6,292  (+25.9%)  DD=-49.8%  Sharpe=0.72  trades=123
+  Running: combined_60_20 + post_sl_24h [holdout]... final=$4,252  (-15.0%)  DD=-18.5%  Sharpe=-34.04  trades=17
+
+====================================================================================================
+  COMPARISON TABLE — sorted by total return
+====================================================================================================
+  Scope    Filter             Sizing            Final $    Return     CAGR       DD   Sharpe  Trades    Win%
+  -------- ------------------ -------------- ---------- --------- -------- -------- -------- ------- -------
+  full     combined_60_20     post_sl_24h    $    6,292    +25.9%    +4.5%   -49.8%   +0.72     123   41.5%
+  holdout  combined_60_20     post_sl_24h    $    4,252    -15.0%   -81.2%   -18.5%  -34.04      17    5.9%
+
+======================================================================
+  BEST: combined_60_20 + post_sl_24h
+======================================================================
+  Period: 2020-08-07 → 2025-10-28 (5.22 years)
+  Starting capital:  $5,000
+  Final equity:      $6,292
+  Total return:      +25.85%
+  CAGR:              +4.50%
+  Max drawdown:      -49.81%
+  Sharpe (ann):      0.72
+  Sharpe (per trade): 0.149
+  Trades:            123 (23.5/year)
+  Win rate:          41.5%
+  Avg win:           $239.33 (+23.35%)
+  Avg loss:          $-151.58 (-11.58%)
+  Avg hold:          5.1 days
+  Total fees paid:   $2,190.23
+  Max consec losses: 23
+  Exit reasons:      {'sl': 69, 'tp': 45, 'timeout': 9}
+  Skipped (capital): 636
+  Skipped (pyramid): 0
+
+Results saved to /content/crypto/experiments/backtest_results.json

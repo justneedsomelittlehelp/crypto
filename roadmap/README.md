@@ -25,8 +25,12 @@
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **In progress** |
-| 4 | Kraken API Integration | Not started |
+| 3 | ML Model Development | **Audit complete — shelved** (2026-04-12). See `experiments/EVAL_AUDIT.md`. |
+| 4 | Kraken API Integration | Not started — not green-lit |
 | 5 | Trading Strategy & Execution Engine | Not started |
 | 6 | Live Trading & Monitoring | Not started |
 | 7 | Optimization & Hardening | Not started |
+
+## Project status (2026-04-12)
+
+**Paused at end of Phase 3.** The first hypothesis — *VP-only features on 1h BTC, long-only, can produce an automated strategy that beats passive SPY* — was rejected after a pre-deployment audit uncovered walk-forward label leakage and test-set parameter tuning. Honest best strategy profile is +6.0% CAGR / −18.4% DD, which does not justify the operational overhead versus passive index exposure. Infrastructure (walk-forward with embargo, holdout protocol, backtest engine, VP features, transformer pipeline) is preserved for any future hypothesis.

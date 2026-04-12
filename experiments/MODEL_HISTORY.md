@@ -815,26 +815,42 @@ Realistic live expectation (after backtest decay):
 
 ---
 
-## 20. Next Directions (as of 2026-04-12)
+## 20. ⚠ Audit Retraction — Evals 11 / 12 / 17 / 18 (2026-04-12)
 
-**⭐⭐⭐ DEPLOYABLE STRATEGY (2026-04-12, Eval 17): v6-prime + ensemble + combined_60_20 + 100% sizing + 3x leverage + 24h post-SL pause → +34.0% CAGR, -15.1% max DD, 72.0% win rate, 50 trades over 3.66 years. Beats S&P 500 3.4x return at LESS drawdown. Realistic live expectation: +22-27% CAGR with -18-22% DD.**
+**Retraction.** The "deployable strategy" from Eval 17 (+34.0% CAGR / −15.1% DD / 72% win rate) and the asymmetry-filter breakthrough from Evals 11–12 (+3.98% EV/trade, 78% precision) **do not hold up under audit**. A walk-forward label leak and a test-set sweep on the post-SL pause inflated both headlines. With embargo and a pristine out-of-sample holdout, the honest version is:
 
-**Per-trade benchmark (Eval 12):** v6-prime + combined_65_15 filter → +3.98% EV/trade, 78.4% precision, 435 trades, Sharpe 0.97 (per trade)
+| Config | CAGR | Max DD | Win % | Holdout |
+|---|---|---|---|---|
+| Claimed Eval 17 (contaminated) | **+34.0%** | **−15.1%** | 72% | n/a |
+| Same config, embargo'd labels | +4.5% | **−49.8%** | 41.5% | −15% (17 trades) |
+| Honest best (`conf_70 + guard + 1x/20% + pause24`) | +6.0% | −18.4% | 65% | **−4.8%** |
 
-Next directions:
+Mechanisms of the leak:
 
-1. **VP-derived TP/SL labels** — use `vp_ceiling_dist` and `vp_floor_dist` as per-sample TP/SL targets instead of fixed 7.5%/3%. Matches user's manual strategy of aiming at the next VP peak. Makes labels adaptive — tight ceilings → small TP, open space → large TP.
+1. **Walk-forward with no embargo.** First-hit labels look 14 days ahead. Without embargo, training labels for bars near `train_end` used prices inside val/test.
+2. **Post-SL pause tuned on test set.** The "24h unicorn" and the 21h–30h sensitivity sweep both selected the pause on the same period whose metrics they reported.
+3. **Asymmetry filter rode #1.** Under embargo, `asym ≥ 2.0` drops to 19.8% precision / −0.95% EV. The filter's apparent edge was entirely the leak telling the model which high-ratio setups would actually resolve to TP.
+4. **3x leverage + 100% sizing hid a fragile signal.** On clean labels the strategy runs out of capital on 2025-10-28 in full-period backtest.
 
-2. **Regularization overhaul** — models currently converge in 1-2 epochs then overfit (`patience=15` wasted). Try:
-   - weight_decay=1e-3 (L2 regularization)
-   - dropout=0.3 (up from 0.15)
-   - label_smoothing=0.1
-   - AdamW optimizer (proper weight decay)
+**Decision.** Phase 3 is not "DONE — ready for Phase 4." It's audit-complete, strategy shelved. +6% CAGR / −18% DD does not beat passive SPY, and the whole point of an automated crypto bot is to beat passive. Project is paused with infrastructure preserved.
 
-3. **Combined test:** v6 + VP-derived TP/SL + regularization overhaul.
+Full details, per-fold EV table, config sweep, and what a future attempt would need to clear: `experiments/EVAL_AUDIT.md`.
 
-Deprioritized: funding rate (too brittle), liquidation data (too expensive), tighter fixed TP/SL (fees), more architecture iterations (ceiling already hit).
+## 21. What the audit did NOT invalidate
+
+- The v6-prime architecture and training pipeline are sound.
+- The embargo'd model still picks 60–75% winners across folds — there's a real (small) edge in the signal itself. What's broken is the deployment wrapper, not the model.
+- Per-regime EV breakdown is intact: **bull_long +1.64%**, **bear_short +0.70%**, bull_short and bear_long both negative. The model predicts direction correctly by FGI regime. Long-only in 2025 H2 was fighting the tape. A regime-aware both-sides strategy was never tested on embargo'd data and remains the most credible "unexplored" direction if the project ever restarts.
+- The TP/SL guard (`min_asymmetry = 1.0` — reject trades where `tp_pct < sl_pct` at entry) is a legitimate pre-entry filter. It halved DD on honest backtests without using lookahead info. Worth carrying forward.
+
+## 22. Parked directions (if the project ever resumes)
+
+1. **Regime-aware direction switching** (bull→long, bear→short) on embargo'd predictions.
+2. **Funding rate / OI as training-time inputs**, not frozen-backbone fine-tuning (Eval 9 failed because of the fine-tune approach, not the feature).
+3. **Different label definition** that doesn't produce the payoff asymmetry (avg_loss > avg_win) we saw on holdout.
+
+Deprioritized: more VP-only 1h iterations, tighter TP/SL, architecture tweaks. The ceiling of the current hypothesis is known now.
 
 ---
 
-*Last updated: 2026-04-11.*
+*Last updated: 2026-04-12 after audit.*

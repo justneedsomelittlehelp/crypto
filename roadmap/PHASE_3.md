@@ -1,5 +1,7 @@
 # Phase 3: ML Model Development
 
+> **Status (2026-04-12): Audit complete — strategy shelved.** A pre-deployment audit uncovered a walk-forward label leak (no embargo between folds, first-hit labels looking 14 days ahead) and a test-set sweep of the post-SL pause parameter. The Eval 17 "deployable strategy" (+34% CAGR / −15% DD / 72% win rate) does not reproduce under clean labels. Honest best config: `conf_70 + tp/sl guard + 1x / 20% + 24h pause` → **+6.0% CAGR / −18.4% DD / 65% win rate / holdout ≈ −5%**, which does not beat passive SPY. Project paused at end of Phase 3 with infrastructure preserved. See `experiments/EVAL_AUDIT.md` for the full post-mortem.
+
 ## Goal
 Build, train, evaluate, and iterate on a PyTorch model that generates trading signals from the feature set.
 

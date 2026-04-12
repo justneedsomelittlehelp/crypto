@@ -39,6 +39,7 @@ Read the relevant doc before modifying code in that domain:
 | **TP/SL sweep (11 configs, long+short, FGI vs SMA regime)** | `experiments/EVAL_TPSL_SWEEP.md` |
 | **Dual-branch Transformer (VP + Candle, separate attention)** | `experiments/EVAL_DUAL_BRANCH.md` |
 | **Model evolution history (living doc)** | `experiments/MODEL_HISTORY.md` |
+| **⚠ Audit post-mortem — retracts Eval 11/12/17/18** | `experiments/EVAL_AUDIT.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
 ## Key Data
@@ -73,8 +74,8 @@ Read the relevant doc before modifying code in that domain:
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **DONE** — Deployable strategy: v6-prime + ensemble + combined_60_20 + 100% sizing + 3x leverage + 24h post-SL pause = **+34.0% CAGR / -15.1% DD / 72% win rate**, zero liquidations. 3.4x S&P 500 return at LESS drawdown. Ready for Phase 4. |
-| 4 | Kraken API Integration | Not started |
+| 3 | ML Model Development | **Audit complete — strategy shelved.** 2026-04-12 audit uncovered a walk-forward label leak + test-set pause tuning. With embargo and a pristine holdout, the "deployable" Eval 17 strategy (+34% CAGR / -15% DD) does **not** reproduce. Honest best config (`conf_70 + tp/sl guard + 1x / 20% + 24h pause`) is +6.0% CAGR / -18.4% DD / holdout ≈ -5%. Does not beat passive SPY. Project paused at end of Phase 3 with infra preserved. See `experiments/EVAL_AUDIT.md`. |
+| 4 | Kraken API Integration | Not started — not green-lit |
 | 5 | Trading Strategy & Execution | Not started |
 | 6 | Live Trading & Monitoring | Not started |
 | 7 | Optimization & Hardening | Not started |
