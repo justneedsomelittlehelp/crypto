@@ -155,6 +155,66 @@ Collected raw logits from walk-forward (10 folds, 20,435 test samples) and analy
 
 ---
 
+## v10 — 30d VP × 90d temporal window + both-sides backtest (2026-04-13) ❌ NULL RESULT
+
+**Hypothesis:** Flip the lookback allocation vs v6-prime: shorten VP window 180d → 30d (match chart-reader recency) while extending the temporal transformer window 30d → 90d of day tokens. Architecturally identical to v6-prime (24,737 → 26,657 params, only `temporal_pos` grows). Paired with a backtest-layer short overlay to test the audit memo's "most credible unexplored direction": regime-aware both-sides trading.
+
+### Setup
+- **Data:** `BTC_1h_RELVP_30d.csv` (new 30d VP CSV via `src/data/compute_vp_30d.py`)
+- **Model:** `src/models/architectures/v10_long_temporal.py` — subclass of v6-prime with `n_days=90`
+- **Eval:** `src/models/eval_v10.py` — thin patch wrapper around `eval_v6_prime.main()`
+- **Embargo:** unchanged from audited protocol (336 bars = 14d = `LABEL_MAX_BARS`)
+- **Folds 11-12:** embargoed holdout (2025-07-01 → 2026-04-08)
+- **Short overlay:** `src/models/backtest_v10_both_sides.py` — mirror-short first-hit from predictions cache; short_tp = long_sl, short_sl = long_tp
+
+### Training-level result
+- **Label distribution:** 63,715 valid, 28.4% label-1 / 71.6% label-0
+- **Mean TP:** 13.2% (median 15% — hits the clip cap), **mean SL:** 6.25%
+- **Overall precision (pred=1):** 29.94% — below the 28.4% label-1 base rate
+- **Walk-forward EV baseline (unfiltered long):** −1.16% per trade across 2,953 trades
+- **Holdout baseline (long-only):** −7.58% per trade across 249 trades (worse than v6-prime audited's ~−5%)
+- **Headline conf_0.8 filter:** +3.82% EV on 554 trades, 74.9% precision — but the filter is chosen across all 12 folds including holdout, so it's post-hoc and reproduces the Eval 11/12/17 trap the audit closed.
+
+### Backtest engine result (`conf_70_guard + 3x + pause24`)
+| Scope | Final $ | Return | CAGR | DD | Sharpe | Trades | Win% |
+|---|---|---|---|---|---|---|---|
+| Full (4.34y) | $550 | −89.0% | −39.9% | −81.6% | −1.12 | 37 | 18.9% |
+| Holdout | $3,752 | −25.0% | −56.4% | −1.1% | −3.73 | 4 | 0.0% |
+
+Under the audited deployable config, v10 is catastrophically worse than v6-prime audited. 28 of 37 full-run trades stop out.
+
+### Short-overlay backtest (regime-aware + agnostic both-sides)
+Mirror short payout is structurally broken: short wins pay 6.3% (long SL), short losses cost 13.2% (long TP) — a 1:2 payout ratio that needs ~67% win rate just to break even.
+
+| Setup | Holdout trades | Win% | EV/trade |
+|---|---|---|---|
+| Unconditional short (no model) | 906 | 97.6% | **+5.87%** |
+| Short, logit<0 | 678 | 97.5% | +4.75% |
+| Short, logit<−0.5 | 370 | 100% | +1.65% |
+| Regime-aware both-sides, thr=0 | 445 | — | +4.67% |
+| Regime-agnostic both-sides, thr=0 | 927 | — | +1.44% |
+
+**The damning comparison:** unconditional shorting of **every bar** in the holdout outperforms every model-filtered variant. Every logit threshold makes it *worse*, because the "win" is not model skill — it's first-hit mechanics in a falling market. The holdout window (2025-07 → 2026-04) is bear-heavy, and under the v10 label's tight-TP/loose-SL short geometry, almost every bar resolves as "drop 6% before bouncing 13%."
+
+The only real signal on holdout is `long, logit>0.75`: 29 trades, 79.3% win rate, +6.41% EV. Same pattern as v6-prime audited — high precision, ~3 trades/month, too sparse to build around.
+
+### Conclusion
+- **v10 architecture:** no advantage over v6-prime on any honest metric. Label geometry was worse, not better.
+- **Regime-aware both-sides:** exhausted. The apparent holdout edge is a first-hit label artifact in a bearish regime, not a model signal. The audit memo's "most credible unexplored direction" is now explored and closed.
+- **Phase 3 shelf remains closed.** No post-audit iteration has moved the holdout needle; nothing meaningfully beats v6-prime audited's +6.0% CAGR / −18.4% DD (which itself does not beat passive SPY).
+
+Files:
+- `src/models/architectures/v10_long_temporal.py`
+- `src/models/eval_v10.py`
+- `src/data/compute_vp_30d.py`
+- `src/models/run_backtest_v10.py`
+- `src/models/backtest_v10_both_sides.py`
+- `experiments/eval_v10_results.json`
+- `experiments/backtest_results_v10.json`
+- `experiments/backtest_v10_both_sides.json`
+
+---
+
 ## v6-prime: VP-derived TP/SL labels + regularization (Eval 10, 2026-04-12)
 
 **Hypothesis:** VP-derived per-sample TP/SL labels should give cleaner training signal than fixed 7.5/3 because labels align directly with what the model predicts (VP barrier proximity). Regularization overhaul should fix the "converges in 1-2 epochs" problem.

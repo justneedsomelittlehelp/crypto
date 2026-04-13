@@ -75,7 +75,7 @@ Read the relevant doc before modifying code in that domain:
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **Audit complete — strategy shelved.** 2026-04-12 audit uncovered a walk-forward label leak + test-set pause tuning. With embargo and a pristine holdout, the "deployable" Eval 17 strategy (+34% CAGR / -15% DD) does **not** reproduce. Honest best config (`conf_70 + tp/sl guard + 1x / 20% + 24h pause`) is +6.0% CAGR / -18.4% DD / holdout ≈ -5%. Does not beat passive SPY. Project paused at end of Phase 3 with infra preserved. See `experiments/EVAL_AUDIT.md`. |
+| 3 | ML Model Development | **Audit complete + 4 post-audit experiments rejected — strategy shelved.** 2026-04-12 audit retracted Eval 11/12/17/18 (walk-forward label leak + test-set pause tuning). Honest best (`conf_70 + tp/sl guard + 1x / 20% + 24h pause`) is +6.0% CAGR / -18.4% DD / holdout ≈ -5%. Post-audit: Stage 1 regression labels, Stage 2 v9 structure token, v10 (30d VP × 90d temporal), and both-sides short overlay all rejected on holdout. The audit's "most credible unexplored direction" (regime-aware both-sides) is now closed. Does not beat passive SPY. Project paused with infra preserved. See `experiments/EVAL_AUDIT.md` + `experiments/EVAL_TRANSFORMER.md` §v10. |
 | 4 | Kraken API Integration | Not started — not green-lit |
 | 5 | Trading Strategy & Execution | Not started |
 | 6 | Live Trading & Monitoring | Not started |
