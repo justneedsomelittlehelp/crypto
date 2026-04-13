@@ -220,7 +220,7 @@ Stage 1 artifacts kept in the repo for forensic reference:
 - `src/models/run_backtest_regression.py` — regression backtest driver (kept but not in use)
 - `src/backtest/engine.py` — `prediction_mode` / `min_predicted_return` config fields remain, inert in binary mode
 
-### Stage 2 — Structure context token with v6-prime binary labels (running)
+### Stage 2 — Structure context token with v6-prime binary labels (NULL RESULT)
 
 Goal: isolate the effect of the architectural change on the pipeline we already know works. Binary first-hit labels, BCE loss, label smoothing, AdamW, SWA, multi-seed ensembling — all held constant. **Only** change: spatial attention now operates on 52 tokens instead of 51, with a dedicated "structure context token" that projects the 8 VP structure features per day to `embed_dim`.
 
@@ -230,10 +230,79 @@ New files:
 - `src/models/eval_v9.py` — eval script. Imports all non-model utilities directly from `eval_v6_prime.py` so the Stage 2 experiment is a strict A/B against the v6-prime baseline.
 - `src/models/run_backtest_v9.py` — backtest driver. Same locked honest config as the audited best: `conf_65/70/75 + min_asymmetry=1.0 + 1x/20% + 24h post-SL pause`.
 
-**Success criteria for Stage 2.** On the honest backtest:
+#### Overall eval metrics
 
-1. Full-period CAGR ≥ +6% (matches or exceeds v6-prime audited baseline) at ≤ −20% DD.
-2. **Holdout return positive** (vs v6-prime's ~−5%). This is the signal the architecture change earned its keep.
-3. Fold-11 and fold-12 individual EVs non-negative.
+| Metric | v6-prime (audited) | **v9 wall-aware** | Delta |
+|---|---|---|---|
+| n (all folds) | 31,243 | 31,243 | — |
+| Accuracy | 70.52% | 69.88% | −0.64 |
+| Precision | 60.69% | 60.11% | −0.58 |
+| NPV | 79.03% | 78.20% | −0.83 |
+| Long-only real EV/trade | +0.459% | +0.474% | +0.015 |
 
-If all three clear, Stage 3 (volume-weighted effective-distance labels) is worth running. If holdout stays negative, the model's ceiling is effectively at the v6-prime baseline and architecture isn't the bottleneck.
+Essentially indistinguishable at the aggregate level. The structure context token produces a tiny EV uplift that's lost in the noise.
+
+#### Fold-by-fold (v9 vs v6-prime long-only real EV %)
+
+| Fold | Period | v6-prime acc/EV | **v9 acc/EV** | Verdict |
+|---|---|---|---|---|
+| 1 | 2020 H2 | 56.1% / +6.30% | **37.5% / +3.32%** | v9 much worse |
+| 2 | 2021 H1 | 49.3% / −3.11% | 47.5% / −4.19% | v9 slightly worse |
+| 3 | 2021 H2 | 63.1% / +2.44% | **85.6% / +7.38%** | **v9 dramatically better** |
+| 4 | 2022 H1 | 58.0% / −4.56% | 60.9% / −4.51% | tied |
+| 5 | 2022 H2 | 85.6% / −1.50% | 82.1% / −2.38% | v9 slightly worse |
+| 6 | 2023 H1 | 81.4% / +0.36% | 79.8% / +0.67% | tied |
+| 7 | 2023 H2 | 65.8% / +1.23% | 63.7% / +1.13% | tied |
+| 8 | 2024 H1 | 76.3% / +3.36% | **81.6% / +5.01%** | **v9 better** |
+| 9 | 2024 H2 | 81.5% / +2.82% | 76.4% / +1.63% | v9 worse |
+| 10 | 2025 H1 | 90.3% / +1.25% | 90.7% / +1.40% | tied |
+| **11** | **2025 H2 (holdout)** | 68.0% / −0.84% | **69.1% / −1.76%** | **v9 worse** |
+| **12** | **2026 Q1 (holdout)** | 91.7% / −0.60% | 91.7% / −0.60% | tied |
+
+**Two wins (folds 3, 8), five losses (1, 2, 5, 9, 11), five ties.** Fold 3 and fold 8 are dramatic — +4.94pp and +1.65pp of per-trade EV respectively, on folds with rich training data and well-defined VP walls. But those wins don't propagate to the holdout.
+
+#### Backtest (conf_70_guard + 1x/20% + 24h pause — best filter for both)
+
+| Metric | v6-prime | **v9** | Delta |
+|---|---|---|---|
+| Full return | +33.5% | +6.8% | −26.7 pts |
+| CAGR | +6.0% | +1.9% | −4.1 |
+| Max DD | −18.4% | −17.1% | +1.3 |
+| Win rate | 65% | 57% | −8 |
+| Trades | 117 | 100 | −17 |
+| **Holdout return** | **−4.8%** | **−5.7%** | **−0.9** |
+| Holdout trades | 15 | 10 | −5 |
+| Holdout win rate | 13% | **0%** (0/10) | −13 |
+
+**None of the three success criteria clear.** V9 does not beat v6-prime on full-period CAGR, does not produce positive holdout return, and fold-11 EV is worse than v6-prime's.
+
+#### Diagnosis
+
+The structure context token is not neutral — it's genuinely useful *on specific folds*. Fold 3 is the clearest signal: 22 percentage points of accuracy and 3× per-trade EV over v6-prime, with fewer trades (the model became more selective). Fold 8 shows the same pattern at a smaller magnitude. Both are folds with (a) ≥5 years of training data and (b) test windows with well-defined VP consolidation zones.
+
+But the added capacity also hurts on folds where training data is small or heterogeneous. Fold 1 (smallest train) shows classic overfitting: v9 takes 321 more long trades than v6-prime and gets them systematically wrong (accuracy drops from 56% → 38%). The fold-1 damage roughly cancels the fold-3 gain, and the other folds are noise.
+
+**Net effect on holdout: slightly negative.** Zero wins out of 10 trades on fold 11's holdout subset is not statistically powerful on 10 trades, but combined with the fold-11 full-window EV of −1.76% (worse than v6-prime's −0.84%), the direction is clear.
+
+#### Conclusion
+
+**Stage 2 is a null result on the success criteria and a slight net negative on holdout.** The architectural hypothesis — "VP structure features aren't reaching spatial attention, so the model can't reason about walls" — was falsifiable and has been falsified. The model *can* use the information when conditions are right (folds 3, 8), but can't use it consistently enough to improve generalization to post-2025-07 data.
+
+Where this leaves us:
+
+1. **The audited v6-prime configuration remains the best honest strategy.** +6.0% CAGR / −18.4% DD / holdout ≈ −5%. Still does not beat passive SPY.
+2. **Two of the three major hypothesis legs have now been tested** (regression labels in Stage 1, structure context token in Stage 2). Both failed to clear the bar.
+3. **Stage 3 (volume-weighted effective-distance labels) remains technically available** as the third leg — a label formula rewrite. But the pattern of two successive null-to-negative results lowers the prior that Stage 3 will produce the breakthrough. Honest odds estimate: 20–30% chance of clearing the holdout bar.
+
+Stage 2 artifacts preserved in the repo for forensic reference:
+
+- `src/models/architectures/v9_wall_aware.py` — frozen v9 architecture
+- `src/models/eval_v9.py` — eval script
+- `src/models/run_backtest_v9.py` — backtest driver
+- `experiments/v9_test/eval_v9_results.json` — full fold-by-fold eval output
+- `experiments/v9_test/eval_v9_log.txt` — training log
+- `experiments/backtest_results_v9.json` — backtest output (full + holdout scopes)
+
+---
+
+**Current project status (end of Stage 2):** Audit-complete, Stage 1 and Stage 2 experiments both rejected, v6-prime honest configuration remains the best available strategy, and it does not beat passive SPY. Project remains paused at end of Phase 3. Stage 3 is the final available experiment but is not currently planned — user's call whether to run it.

@@ -853,4 +853,62 @@ Deprioritized: more VP-only 1h iterations, tighter TP/SL, architecture tweaks. T
 
 ---
 
-*Last updated: 2026-04-12 after audit.*
+## 23. Post-audit Stage 1 — v9-regression (REJECTED, 2026-04-12)
+
+Attempted Philosophy D: replace binary first-hit labels with continuous realized-P&L labels under the same VP-derived TP/SL exit model, trained with HuberLoss.
+
+**First run collapsed in 5 epochs** (`delta=0.02` too tight — L1 behavior over the entire bimodal label distribution → model parked at the conditional median near 0). Fix: `delta=0.10` to keep L2 over typical label range.
+
+**Second run failed on heterogeneous folds.** Fold 1 (small train): train corr 0.52, val corr ≈ 0, ensemble corr −0.146 (correlated seed errors). Fold 5 (large train, 4 regimes stacked): train corr 0.07 max, `best val_loss at epoch 1` on 2/3 seeds (training actively destroyed generalization), ensemble gave 13 signals out of 3,696 bars with real EV −2.17%.
+
+**Diagnosis.** The labels are nearly bimodal (clustered at `+tp_pct` and `−sl_pct`). Regression loss minimizes squared error across the distribution and its optimum is the conditional mean — near zero for a 60/40 SL-skewed dataset. Classification (BCE) is the structurally correct match for bimodal outcomes; v6-prime's binary version hit 86% accuracy on the same fold 5 window that Stage 1 could barely learn.
+
+**Rejected.** Philosophy D is incompatible with this label distribution at this model scale. Artifacts (`src/models/eval_v9_regression.py`, `src/models/run_backtest_regression.py`) kept in repo for forensic reference.
+
+## 24. Post-audit Stage 2 — v9-wall-aware (NULL RESULT, 2026-04-12)
+
+Attempted Option B: add a "structure context token" to the spatial attention sequence (52 tokens = CLS + 50 VP bins + structure-context projected from the 8 per-day VP structure features). `+320` parameters over v6-prime. All other hyperparameters, labels, training loop, and walk-forward identical to v6-prime.
+
+**Overall metrics (all folds ensembled):**
+
+| Metric | v6-prime | v9 | Delta |
+|---|---|---|---|
+| Accuracy | 70.52% | 69.88% | −0.64 |
+| Precision | 60.69% | 60.11% | −0.58 |
+| Long-only real EV/trade | +0.459% | +0.474% | +0.015 |
+
+**Fold-level pattern:** 2 dramatic wins, 5 small losses, 5 ties.
+
+- **Fold 3 (2021 H2):** v6 63.1% acc / +2.44% EV → v9 **85.6% acc / +7.38% EV** (+22 pp acc, 3× EV per trade). Biggest single-fold improvement in the project's history.
+- **Fold 8 (2024 H1):** v6 76.3% / +3.36% → v9 **81.6% / +5.01%** (second clean win).
+- **Fold 1 (2020 H2, smallest train):** v6 56.1% / +6.30% → v9 **37.5% / +3.32%** (classic overfitting on small heterogeneous train — the added capacity memorized pre-2020 regimes that didn't transfer to post-COVID rally).
+- **Fold 11 (2025 H2 holdout):** v6 68.0% / −0.84% → v9 **69.1% / −1.76%** (worse on the metric that matters).
+
+**Backtest head-to-head (`conf_70_guard + 1x/20% + 24h pause`, honest audited config):**
+
+| Metric | v6-prime | v9 |
+|---|---|---|
+| Full CAGR | +6.0% | +1.9% |
+| Max DD | −18.4% | −17.1% |
+| Full win rate | 65% | 57% |
+| **Holdout return** | **−4.8%** | **−5.7%** |
+| Holdout win rate | 13% | **0% (0/10)** |
+
+**None of the three success criteria clear.** V9 did not match v6-prime's full CAGR, did not produce positive holdout return, and fold-11 EV was worse than v6-prime's. Zero winners in 10 holdout trades is not statistically powerful on n=10 but the direction is consistent with the full-window fold-11 EV.
+
+**Interpretation.** The structure context token is not neutral — it's genuinely useful *on some folds*. Fold 3 is the clearest proof-of-concept: the model became more selective (973 trades vs v6's 1,524) and each trade was 3× more profitable. But the same extra capacity hurt on folds with small/heterogeneous training data. Net effect on holdout: slight negative.
+
+**Rejected on holdout criterion.** The architectural hypothesis is falsified for this data/scale: VP structure features reaching the spatial attention layer does NOT produce a strategy that generalizes to post-2025-07 data.
+
+Stage 2 artifacts preserved: `src/models/architectures/v9_wall_aware.py`, `src/models/eval_v9.py`, `src/models/run_backtest_v9.py`, `experiments/v9_test/eval_v9_results.json`, `experiments/v9_test/eval_v9_log.txt`, `experiments/backtest_results_v9.json`.
+
+## 25. Current status (end of Stage 2)
+
+- **Audited v6-prime honest config remains the best available strategy.** +6.0% CAGR / −18.4% DD / holdout ≈ −5% / 65% win rate. Does not beat passive SPY.
+- **Two of three post-audit experiments run. Both rejected.** Stage 1 failed for loss-function reasons (regression on bimodal labels). Stage 2 failed on holdout generalization (architecture alone insufficient).
+- **Stage 3 (volume-weighted effective-distance labels) is technically available** as the third and final leg. Given the fold-3 and fold-8 wins in Stage 2, the "architecture can use wall structure when conditions are right" hypothesis is partially supported, and better labels might generalize those wins. Honest prior: 20–30% chance Stage 3 clears the holdout bar.
+- **No Stage 3 is currently planned.** Decision paused pending user's call.
+
+---
+
+*Last updated: 2026-04-12 after Stage 2.*
