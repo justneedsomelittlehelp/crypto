@@ -19,7 +19,7 @@ venv/
 # Data files (large, regenerable)
 *.csv
 *.npz
-data/
+/data/
 
 # Experiment run folders (model weights, metrics)
 experiments/runs/

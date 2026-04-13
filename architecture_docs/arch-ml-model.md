@@ -116,8 +116,32 @@ See `experiments/MODEL_HISTORY.md` for full reasoning behind each transition.
 | `v7_simple_2plus1.py` | 2+1 simple, mean pool | Eval 5 |
 | `v8_enriched_2plus1.py` | 2+1 enriched, CLS pool | Eval 6, 8 |
 | **`v6_prime_vp_labels.py`** | **⭐⭐ Same as v6 (frozen for VP-derived label experiments)** | **Current best (Eval 11-12)** |
+| `v10_long_temporal.py` | Subclass of v6-prime with `n_days=90` (90-day temporal window) | `eval_v10` — post-audit experiment |
 
 Frozen rules: never modify. New experiments create new versioned files.
+
+### v10 design note (2026-04-12)
+
+v10 flips the lookback allocation vs v6-prime: **VP lookback 180d → 30d**
+(via `BTC_1h_RELVP_30d.csv`), **temporal window 30d → 90d** (via
+`n_days=90` in the shared architecture). Rationale: match the
+chart-reader view of "zoom in on recent volume, zoom out on price
+action."
+
+Architecturally v10 is identical to v6-prime — only the temporal
+positional embedding grows (31×32 → 91×32, +1,920 params), taking total
+params from 24,737 → 26,657. The spatial/temporal transformer weights
+are untouched.
+
+Effective history per forward pass: 120 days (30d VP + 90d model),
+down from 210d on v6-prime, but warmup loss shrinks by the same amount
+so usable training rows actually increase by ~2,100. Sample/param ratio
+stays ≈ 2.6:1 — unchanged risk profile, not an overfitting fix.
+
+Files:
+- Model: `src/models/architectures/v10_long_temporal.py`
+- Eval: `src/models/eval_v10.py` (thin wrapper patching `eval_v6_prime`)
+- Data: `src/data/compute_vp_30d.py` (one-time CSV generator)
 
 ## Training principles
 
