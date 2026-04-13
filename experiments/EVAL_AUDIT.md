@@ -187,3 +187,53 @@ But none of those are in scope right now. The project is paused at the end of Ph
 - Best honest strategy profile: **+6.0% CAGR / −18.4% DD / 65% win rate / 23 trades per year / holdout ≈ −5%**
 - This does not beat passive SPY on either return or risk.
 - Phase 3 = audit complete, strategy shelved, infra preserved.
+
+---
+
+## 8. Post-audit experiments (2026-04-12, same day)
+
+The user chose to attempt one more round of experiments before re-shelving, explicitly as "not the type of person that gives up." Two leverage points were identified from the audit and the discussion that followed it:
+
+1. **Architecture**: v6-prime's spatial attention is blind to VP structure features (`peak_strength`, `ceiling_dist`, `floor_dist`, `num_peaks`, etc). Those features are wired into the day-token enrichment bottleneck and the last-hour FC skip, but they never enter the spatial attention layer that's supposed to reason about bin positions. Adding a "structure context token" to the spatial sequence would give attention explicit access.
+2. **Labels (Philosophy D)**: replace binary first-hit `{0, 1, NaN}` labels with continuous realized-P&L labels under the same TP/SL exit model. Hypothesis: continuous labels give the model richer information, and a regressor predicting expected return is a cleaner deployment target than a classifier predicting binary barrier hits.
+
+Staged plan was three experiments, each with a clean checkpoint. Labels locked to the existing VP-derived formula with no changes. Walk-forward + 14-day embargo + holdout protocol preserved throughout.
+
+### Stage 1 — Regression labels with v6-prime architecture (REJECTED)
+
+Goal: isolate the effect of Philosophy D before touching architecture.
+
+**First run collapsed in 5 epochs** (`Huber delta = 0.02` was the wrong choice for label distribution). Fix: `delta = 0.10` to put L2 behavior over the typical label range.
+
+**Second run (after fix) failed on heterogeneous folds.** Key observations:
+
+- **Fold 1** (2020 H2, smallest train set): train correlation reached 0.52, val correlation hovered near 0 with occasional negative spikes. Ensemble correlation was **−0.146**, worse than individual seeds — three seeds with correlated errors produced an ensemble more biased than any single member. Overfitting, not collapse.
+- **Fold 5** (2022 H2, large heterogeneous train set spanning 6 years and 4 regimes): train correlation peaked at **0.07**. `best val_loss at epoch 1` for seeds 42 and 44 — the model's best generalization came after a single gradient step on random init. Training actively destroyed generalization. Ensemble produced 13 signals out of 3,696 bars (0.35%) with `real_EV@1.5% = −2.17%`.
+
+**Diagnosis.** The VP-derived labels are nearly bimodal (cluster at `+tp_pct` and `−sl_pct` with a thin timeout tail). Regression loss functions assume approximately continuous targets — when given bimodal distributions, they minimize the squared error across the whole distribution and the optimum is the conditional mean, which is near zero. **Classification loss (BCE) is the structurally correct match for bimodal outcomes**; that's why the v6-prime binary version hit 86% accuracy on the exact same fold 5 window that Stage 1 could barely learn at all.
+
+**Conclusion.** Philosophy D is rejected. The experiment taught us something specific and useful: *the magnitude information in P&L labels is not learnable by a ~25k-parameter model on this feature set*. The direction information is — that's what v6-prime was already capturing. Adding continuous magnitude as a target strictly made the optimization landscape worse.
+
+Stage 1 artifacts kept in the repo for forensic reference:
+
+- `src/models/eval_v9_regression.py` — regression eval script (kept but not in use)
+- `src/models/run_backtest_regression.py` — regression backtest driver (kept but not in use)
+- `src/backtest/engine.py` — `prediction_mode` / `min_predicted_return` config fields remain, inert in binary mode
+
+### Stage 2 — Structure context token with v6-prime binary labels (running)
+
+Goal: isolate the effect of the architectural change on the pipeline we already know works. Binary first-hit labels, BCE loss, label smoothing, AdamW, SWA, multi-seed ensembling — all held constant. **Only** change: spatial attention now operates on 52 tokens instead of 51, with a dedicated "structure context token" that projects the 8 VP structure features per day to `embed_dim`.
+
+New files:
+
+- `src/models/architectures/v9_wall_aware.py` — frozen architecture `TemporalEnrichedV9WallAware`, `+320` parameters over v6-prime (Linear(8, 32) for the structure embedder + 1 extra positional slot).
+- `src/models/eval_v9.py` — eval script. Imports all non-model utilities directly from `eval_v6_prime.py` so the Stage 2 experiment is a strict A/B against the v6-prime baseline.
+- `src/models/run_backtest_v9.py` — backtest driver. Same locked honest config as the audited best: `conf_65/70/75 + min_asymmetry=1.0 + 1x/20% + 24h post-SL pause`.
+
+**Success criteria for Stage 2.** On the honest backtest:
+
+1. Full-period CAGR ≥ +6% (matches or exceeds v6-prime audited baseline) at ≤ −20% DD.
+2. **Holdout return positive** (vs v6-prime's ~−5%). This is the signal the architecture change earned its keep.
+3. Fold-11 and fold-12 individual EVs non-negative.
+
+If all three clear, Stage 3 (volume-weighted effective-distance labels) is worth running. If holdout stays negative, the model's ceiling is effectively at the v6-prime baseline and architecture isn't the bottleneck.
