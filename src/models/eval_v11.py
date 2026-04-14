@@ -432,6 +432,12 @@ def main():
     if device.type == "cuda":
         print(f"GPU: {torch.cuda.get_device_name(0)}")
         print(f"bf16 support: {torch.cuda.is_bf16_supported()}")
+        # head_dim = embed_dim / n_heads = 32 / 4 = 8, which Flash Attention
+        # does not support on most kernels (needs head_dim >= 16). Disable
+        # flash SDP and let torch fall back to mem-efficient / math backends.
+        torch.backends.cuda.enable_flash_sdp(False)
+        torch.backends.cuda.enable_mem_efficient_sdp(True)
+        torch.backends.cuda.enable_math_sdp(True)
 
     print("\nConfig:")
     print(f"  CSV:         {CSV_PATH.name}")
