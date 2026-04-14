@@ -147,19 +147,36 @@ def run_filter(tag: str, mask_in: np.ndarray,
 
 def resolve_npz(args) -> Path:
     if args.npz is not None:
-        return Path(args.npz)
-    # Back-compat: if the user saved a pre-parameterized file named
-    # `v11_predictions.npz`, pick it up when --tag is not provided.
-    candidates = [
-        ROOT / "experiments" / f"v11_{args.tag}_predictions.npz",
-        ROOT / "experiments" / "v11_predictions.npz",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
+        p = Path(args.npz)
+        if not p.exists():
+            raise FileNotFoundError(f"Explicit --npz path does not exist: {p}")
+        return p
+
+    # For a specific --tag, require the tag-specific file. Silent fallback
+    # to v11_predictions.npz is dangerous because it can show stale numbers
+    # as if they belonged to the requested run — we hit this bug once when
+    # analyzing 11_tb_nopv results and nearly drew wrong conclusions.
+    tagged = ROOT / "experiments" / f"v11_{args.tag}_predictions.npz"
+    if tagged.exists():
+        return tagged
+
+    # Only fall back to the original filename if the user explicitly asked
+    # for the default tag "11" AND that tag-specific file is missing.
+    if args.tag == "11":
+        legacy = ROOT / "experiments" / "v11_predictions.npz"
+        if legacy.exists():
+            print(
+                f"[warn] {tagged.name} not found — falling back to legacy "
+                f"{legacy.name} (range-label run). Use --tag explicitly to "
+                f"avoid this."
+            )
+            return legacy
+
     raise FileNotFoundError(
-        "Could not find a predictions file. Tried:\n  " +
-        "\n  ".join(str(p) for p in candidates)
+        f"No predictions file for --tag {args.tag!r}.\n"
+        f"  Expected: {tagged}\n"
+        f"  Tip: the eval script writes to experiments/v11_{{tag}}_predictions.npz.\n"
+        f"  Or pass an explicit path via --npz."
     )
 
 
