@@ -1040,68 +1040,80 @@ Full design in `experiments/LABEL_REDESIGN.md`. Artifacts preserved: `src/data/c
 
 Fold breakdown: full wins 8/12 on accuracy, 9/12 on EV. **Both holdout folds** favor full on both metrics. Largest bear-regime lift: fold 5 (2022 H2), +7.41 pp acc / +1.73 pp EV. Largest crash-regime lift: fold 12 (2026 Q1), +6.58 pp acc / +1.73 pp EV — exactly the regimes the user's manual strategy was designed for.
 
-**Filter-swept holdout CAGR** (24h cooldown, 1x / 20% sizing, via `analyze_v11_filters.py`):
+> **⚠ CORRECTION 2026-04-14 (same day, later in session).** The first version of this §30 reported v11-full-tb holdout at **+11.6% CAGR** with a filter-swept comparison table produced by `analyze_v11_filters.py`. That number uses label-accurate compound with no fees/slippage/latency and annualizes over the active-days-only window (~103 days for conf80). When re-run through the real backtest engine (`src/models/run_backtest_v11_tb.py`, same engine that produced v6-prime's audited +6.0% CAGR), the conf≥0.80 holdout lands at **−1.5% CAGR / −1.7% DD / 60.0% WR / 20 trades** over the full 278-day holdout. Full retraction and both-number tables live in `LABEL_REDESIGN.md` §Results. The ablation direction (full beats nopv at every filter) is preserved; the absolute "first positive holdout CAGR" claim is retracted.
 
-| Filter | full CAGR | full DD | full WR | full n | nopv CAGR | nopv WR | Δ CAGR |
-|---|---|---|---|---|---|---|---|
-| Raw long | −26.7% | 38.8% | 47.7% | 220 | −41.3% | 40.4% | **+14.6 pp** |
-| conf ≥ 0.70 | −9.7% | 20.9% | 50.6% | 89 | −24.5% | 31.9% | +14.8 pp |
-| conf ≥ 0.75 | −5.0% | 15.5% | 52.1% | 71 | −14.1% | 35.4% | +9.1 pp |
-| **conf ≥ 0.80** | **+11.6%** | **8.2%** | **58.6%** | **58** | **−1.8%** | **40.9%** | **+13.4 pp** |
+**Filter-swept holdout — analyzer (idealized) vs real engine side-by-side**:
 
-full dominates nopv on holdout CAGR at every filter. Typical lift: +10 to +15 percentage points.
+| Filter | analyzer CAGR | **engine CAGR** | engine n | engine WR | engine DD |
+|---|---|---|---|---|---|
+| Raw long | — | **−26.7%** | 220 | 47.7% | 38.8% |
+| conf ≥ 0.70 + pause24 | −9.7% | **−4.0%** | 29 | 55.2% | 4.2% |
+| conf ≥ 0.75 + pause24 | −5.0% | **−4.0%** | 24 | 54.2% | 4.2% |
+| **conf ≥ 0.80 + pause24** | **+11.6%** | **−1.5%** | 20 | 60.0% | **1.7%** |
 
-### The first positive holdout CAGR in the project's history
+**Gap decomposition for the conf≥0.80 case** (+11.6% → −1.5%):
 
-At `conf ≥ 0.80 + 24h cooldown` on the v11-full-tb holdout:
+1. **Analyzer annualizes over 103-day active window**, engine over 278-day full holdout. Same 3% cumulative return → +11.0% vs +4.0%. **~7.6 pp of the gap.**
+2. **Fees + slippage** (0.62% round-trip on ~5% barriers): per-trade EV drops from +1.02% to +0.41%. **~2-3 pp.**
+3. **Engine sizing is 70% of analyzer sizing** due to `reserve_pct=0.30`. **~0.5 pp.**
+4. **Fold 12 sample variance** on 20 trades clustered in the 2026 Q1 collapse fold. One extra loss shifts CAGR 5-10 pp. **Residual.**
 
-- **58 trades** across ~103 effective days
-- **58.6% win rate** (cleanly above 55.9% class prior)
-- **+0.28% EV per trade**
-- **+11.6% CAGR** (annualized)
-- **8.2% max drawdown** — less than half of v10 honest baseline (18.4%)
+**Ablation comparison under the real engine** (the decisive Δ still holds):
 
-Every prior post-audit experiment produced a negative holdout CAGR at every filter tested. This is the first crossing into positive territory. Caveat: the conf≥0.80 filter is very selective — 58 trades / ~103 active days means the strategy is silent most of holdout. It's not "beat SPY over 10 months." It's "when the model says very confident, it's right enough to compound positively." Important distinction for any live-deployment decision.
+| Filter | full CAGR | nopv CAGR | Δ CAGR | full WR | nopv WR | Δ WR |
+|---|---|---|---|---|---|---|
+| Raw long | −26.7% | −41.3% | **+14.6 pp** | 47.7% | 40.4% | +7.3 |
+| conf ≥ 0.70 + pause24 | −4.0% | −12.5% | **+8.5 pp** | 55.2% | 29.6% | **+25.6** |
+| conf ≥ 0.75 + pause24 | −4.0% | −8.1% | +4.2 pp | 54.2% | 37.5% | +16.7 |
+| conf ≥ 0.80 + pause24 | −1.5% | −3.0% | +1.5 pp | 60.0% | 41.7% | +18.3 |
+
+full beats nopv on real-engine holdout CAGR at every reasonable filter. Win-rate spread of 15-26 percentage points at every threshold — this is the cleanest real-engine evidence that VP features give the model actual discriminatory power on holdout.
 
 ### Sign-flip asymmetry confirms the signal is real
 
 On nopv holdout: sign-flip (`pred == 0` as long) produces −14.4% CAGR / 50.2% WR, vs raw long −41.3% / 40.4%. **The candle-only model is actively anti-aligned with truth on holdout** — it has negative information content, stronger than "uncorrelated."
 
-On full holdout: sign-flip −4.3% / 50.0%, raw long −26.7% / 47.7%. The full model is not anti-aligned; it has a small positive directional bias. Adding the conf≥0.80 filter converts that small bias into a compounding positive EV. On nopv the same filter still loses because the base signal is negative.
+On full holdout: sign-flip −4.3% / 50.0%, raw long −26.7% / 47.7%. The full model is not anti-aligned; it has a small positive directional bias. The conf≥0.80 filter amplifies that bias into a 60% win rate at the narrowest slice — but the resulting 20 trades are not enough to compound positive CAGR under real frictions.
 
-### What this supports and falsifies
+### What this supports and falsifies (corrected)
 
-**Supported:**
-- **VP features carry ML-exploitable signal.** First clean positive result for Phase 3's central hypothesis.
-- **VP features are regime-robust relative to candles.** Holdout lift (+5.02 pp acc) exceeds in-sample lift (+2.62 pp). This is the correct shape for a structural support/resistance feature — it should generalize better than momentum features across regime turns.
-- **Confidence calibration works under clean labels.** Both models show monotonic improvement as the threshold rises, unlike v11-range where it did nothing.
-- **The label redesign was the right move.** Without triple-barrier labels this comparison was literally impossible.
+**Supported (real-engine numbers):**
+- **VP features carry ML-exploitable signal.** Ablation Δ is +1.5 to +8.5 pp holdout CAGR across every filter under the real engine, with win-rate spreads of 15-26 pp. Both are real and direction-stable.
+- **VP features are regime-robust relative to candles.** Holdout accuracy lift (+5.0 pp) exceeds in-sample accuracy lift (+2.6 pp). Correct shape for a structural feature.
+- **Confidence calibration works under clean labels.** Both models show monotonic improvement as the threshold rises, unlike v11-range.
+- **Drawdown shape is materially tighter.** v11-full-tb conf≥0.80 holdout DD is 1.7% vs v6-prime honest 18.4%. Order-of-magnitude improvement. This is the strongest quantitative argument for the representation change.
+- **The label redesign was the right move.** Without triple-barrier labels this ablation was literally impossible.
 
 **Falsified:**
-- The 2026-04-13 tentative verdict that "v11 is rejected because the representation doesn't carry signal." v11 was rejected under range labels because the label formula made the test unfalsifiable. Under clean labels, the representation validates.
-- The assumed pattern "features help in-sample and collapse on holdout." Actual pattern is the opposite — VP helps *more* on holdout than in-sample.
+- *"v11 is rejected because the representation doesn't carry signal"* (2026-04-13 tentative verdict). Under clean labels the representation validates.
+- *"VP features help in-sample and collapse on holdout."* Actual pattern is the opposite — VP helps more on holdout.
+- **⚠ *"v11 produces the first positive holdout CAGR in project history"*** — the original §30 claim, now retracted. Real-engine holdout is −1.5% at best. The analyzer number was inflated by active-days annualization and zero frictions.
 
 **Still open:**
-- Holdout is still net-negative at low-filter variants. The model has signal but deploying it unfiltered loses money. Live deployment requires the high-confidence filter, which means being silent most of the time.
-- Regime change is a shared failure mode. Fold 12 (2026 Q1) is catastrophic for both models (42.2% / 35.6% acc). VP reduces the damage but doesn't fix it — a separate lever (walk-forward retrain frequency) is needed for that.
-- BTC-only. Whether the lift generalizes to ETH / SOL is the natural follow-up and the strongest test of "universal VP signal vs BTC-specific microstructure."
+- Real-engine holdout is net-negative at every filter. Model signal is real per-trade but sample count (20-30 trades over 9 months) isn't enough to compound the positive EV into a positive CAGR after fees.
+- Regime change is a shared failure mode. Fold 12 (2026 Q1) is catastrophic for both models (42.2% / 35.6% acc).
+- v11-full-tb does NOT beat v6-prime honest on full-period CAGR (v11 best +1.8% vs v6p +6.0% real engine). v11's win is entirely in drawdown shape and holdout discrimination.
 
-**Verdict.** v11-full-tb is the first post-audit experiment that moves the needle. Phase 3 formally has a direction for the first time since the 2026-04-12 audit. Artifacts preserved: `src/models/eval_v11.py`, `src/models/analyze_v11_filters.py` (with a fail-loudly fix for the silent npz fallback that nearly caused this result to be misread), `experiments/eval_v11_11_tb_full_results.json`, `experiments/eval_v11_11_tb_nopv_results.json`, `experiments/v11_11_tb_full_predictions.npz`, `experiments/v11_11_tb_nopv_predictions.npz`.
-
----
-
-## 31. Current status (end of Stage 6) — 2026-04-14
-
-- **First positive VP result in project history.** v11-full-tb at conf ≥ 0.80 + 24h cooldown produces **+11.6% holdout CAGR / 8.2% DD / 58.6% WR / 58 trades**. v11-nopv at the same filter lands at **−1.8% CAGR / 40.9% WR**. The Δ is consistent across every filter threshold tested.
-- **Phase 3 central hypothesis (VP carries ML-exploitable signal) is supported for the first time.** Every prior Phase 3 test was confounded by label/feature input sharing. Triple-barrier labels made the test falsifiable and the result came back positive.
-- **v6-prime audited honest (+6.0% CAGR / −18.4% DD / holdout ≈ −5%) is no longer the nominal best.** v11-full-tb conf≥0.80 produces a higher CAGR and a materially smaller drawdown on holdout, although over a different trade count and active-days window so the comparison isn't apples-to-apples.
-- **The signal is weak but regime-robust.** +2-5 pp accuracy lift is modest, but the lift grows on holdout (vs. in-sample) and is most pronounced in bear / crash periods — exactly the regimes the user's manual strategy targets.
-- **Prioritized next experiments**:
-  1. **Multi-asset v11-full-tb** — extend to ETH and SOL. Tests whether the VP lift is universal or BTC-specific. Doc `MULTI_ASSET_PLAN.md` (to be written). This is the next experiment per user direction.
-  2. **Walk-forward rolling retraining** — retrain every 3 months. Addresses the shared holdout collapse problem. Code-only change, ~50 lines in `eval_v11.py`.
-  3. **Live paper-trade the conf ≥ 0.80 wrapper** around v11-full-tb for three months as a sanity check on the +11.6% number.
-- **Option B (meta-labeling on a VP primary rule) is demoted.** The decisive result shows the model is already picking up VP signal in an end-to-end setup, so constraining training to user-relevant setups is less urgent than it was.
+**Verdict.** v11-full-tb is the first post-audit experiment whose ablation is unambiguously positive under real execution assumptions, and the first to cut holdout drawdown below 10%. But it does not beat v6-prime honest on compound return, and it does not produce a positive holdout CAGR. Phase 3 has a validated direction (regime-robust VP signal under clean labels) but the magnitude isn't deployment-ready without more trades or tighter regime conditioning. Artifacts preserved: `src/models/eval_v11.py`, `src/models/analyze_v11_filters.py` (with fail-loudly fix), `src/models/run_backtest_v11_tb.py`, `experiments/eval_v11_11_tb_full_results.json`, `experiments/eval_v11_11_tb_nopv_results.json`, `experiments/v11_11_tb_full_predictions.npz`, `experiments/v11_11_tb_nopv_predictions.npz`, `experiments/backtest_results_v11_tb.json`.
 
 ---
 
-*Last updated: 2026-04-14 after Stage 6 (triple-barrier decisive ablation). Next: multi-asset v11-full-tb on BTC + ETH + SOL.*
+## 31. Current status (end of Stage 6) — 2026-04-14 (corrected)
+
+- **Ablation result stands**: v11-full beats v11-nopv on every real-engine holdout filter. Δ is +1.5 to +8.5 pp CAGR and +15 to +26 pp win rate. VP features carry ML-exploitable signal — Phase 3's central hypothesis is supported for the first time in project history.
+- **⚠ Absolute CAGR claim retracted**: the original §30 reported "+11.6% holdout CAGR, first positive in project history." That number came from `analyze_v11_filters.py` (no fees, active-days annualization) and does not hold under the real engine. Real-engine conf≥0.80 holdout is **−1.5% CAGR / −1.7% DD / 60.0% WR / 20 trades**. Holdout remains net-negative under realistic execution.
+- **v6-prime audited honest (+6.0% full-period CAGR / −18.4% DD / holdout ≈ −5%) remains the nominal best by full-period compound return.** v11-full-tb's best real-engine full-period CAGR is +1.8% at conf≥0.80 — worse than v6-prime on full-period CAGR. v11 wins on:
+  - **Holdout drawdown**: 1.7% (v11 conf80) vs 18.4% (v6p honest). Order-of-magnitude tighter.
+  - **Holdout discrimination**: 60.0% win rate on clean triple-barrier labels vs ~65% under v6p's leaked labels.
+  - **Ablation cleanliness**: the full-vs-nopv result is the first falsifiable VP test the project has ever run.
+- **Sample count is the binding constraint for holdout CAGR.** Model signal is real per-trade (confirmed by the 60% win rate and the ablation Δ), but 20-30 trades × ~0.3% net EV per trade cannot compound into positive CAGR after fees over 278 days. More data is the only lever.
+- **Prioritized next experiments (revised per `MULTI_ASSET_PLAN.md` §REFRAME)**:
+  1. **⭐ Regime conditioning features** (GLD + USO + DXY + VIX + FFR level + FFR 90d change + 10Y-2Y yield curve). Directly attacks the fold 12 / regime-change problem. Single variable change on top of validated v11-full-tb baseline. Replaces the earlier "multi-asset BTC+ETH" plan which was quant-firm-shaped and wrong for this project's deployment shape.
+  2. **Walk-forward rolling retraining** — retrain every 3 months on expanding windows. Other direct attack on holdout collapse. Defer until after regime features so variables stay isolated.
+  3. **Diluted pyramid** (`allow_pyramiding=True` with 5% sizing) as a signal-magnitude diagnostic only. NOT deployable.
+  4. **Live paper-trade the conf ≥ 0.80 wrapper** as a sanity check on drawdown shape and win-rate persistence (NOT on CAGR).
+- **Option B (meta-labeling on a VP primary rule) remains demoted.** End-to-end model is already picking up VP signal; expanding the feature set is more urgent than constraining the training set.
+
+---
+
+*Last updated: 2026-04-14 (corrected) after Stage 6 (triple-barrier decisive ablation) and the real-engine backtest review that retracted the analyzer-idealized CAGR numbers. Next: regime features experiment per `MULTI_ASSET_PLAN.md` §REFRAME.*

@@ -381,16 +381,27 @@ Fold-level comparison (both runs, single seed, same 12 walk-forward folds):
 | In-sample (folds 1–10) | 54.16% | 51.55% | +2.62 pp | +0.898% | +0.751% | +0.15 pp |
 | **Holdout (folds 11–12)** | **46.83%** | **41.81%** | **+5.02 pp** | **−0.68%** | **−1.37%** | **+0.68 pp** |
 
-Filter-swept holdout (24h cooldown, 1x / 20% sizing):
+Filter-swept holdout — **both analyzer (idealized) and real engine** side-by-side. The analyzer row is the original filter analysis using label-accurate compound with no frictions and active-days annualization; the engine row is the real backtest engine (same one that produced v6-prime's audited +6.0% CAGR) with Kraken fees, slippage, 30% reserve, 14-day vertical barrier, `allow_pyramiding=False`, 24h post-SL pause.
 
-| Filter | full CAGR | full DD | full WR | nopv CAGR | nopv WR | Δ CAGR |
+| Filter | analyzer CAGR | **engine CAGR** | engine n | engine WR | engine DD |
+|---|---|---|---|---|---|
+| Raw long | — | **−26.7%** | 220 | 47.7% | 38.8% |
+| conf ≥ 0.70 + pause24 | −9.7% | **−4.0%** | 29 | 55.2% | 4.2% |
+| conf ≥ 0.75 + pause24 | −5.0% | **−4.0%** | 24 | 54.2% | 4.2% |
+| **conf ≥ 0.80 + pause24** | **+11.6%** | **−1.5%** | 20 | 60.0% | **1.7%** |
+
+**⚠ CORRECTION**: the first version of this §9 Stage 6 writeup reported v11-full-tb at conf≥0.80 as "the first post-audit model to produce a positive holdout CAGR (+11.6%)." That number is from the analyzer (label-accurate compound, no fees, active-days annualization). Under the real engine with full 278-day annualization + fees + slippage, the same filter produces **−1.5% CAGR / −1.7% DD / 60.0% WR / 20 trades**. v11-full-tb is NOT the first positive holdout CAGR — that claim is retracted. What it IS: the first post-audit model with holdout drawdown below 10% (1.7% at conf80), and the first with a clean positive ablation Δ under the real engine at every filter threshold tested. See `LABEL_REDESIGN.md` §Results for the full gap decomposition (~7.6 pp from annualization methodology, ~2.5 pp from fees/slippage, ~0.5 pp from sizing, residual from fold 12 variance on 20 trades).
+
+**Ablation comparison under the real engine** (the decisive Δ still holds after the retraction):
+
+| Filter | full CAGR | nopv CAGR | Δ CAGR | full WR | nopv WR | Δ WR |
 |---|---|---|---|---|---|---|
-| Raw long | −26.7% | 38.8% | 47.7% | −41.3% | 40.4% | +14.6 pp |
-| conf ≥ 0.70 | −9.7% | 20.9% | 50.6% | −24.5% | 31.9% | +14.8 pp |
-| conf ≥ 0.75 | −5.0% | 15.5% | 52.1% | −14.1% | 35.4% | +9.1 pp |
-| **conf ≥ 0.80** | **+11.6%** | **8.2%** | **58.6%** (n=58) | −1.8% | 40.9% (n=22) | **+13.4 pp** |
+| Raw long | −26.7% | −41.3% | **+14.6 pp** | 47.7% | 40.4% | +7.3 |
+| conf ≥ 0.70 | −4.0% | −12.5% | **+8.5 pp** | 55.2% | 29.6% | **+25.6** |
+| conf ≥ 0.75 | −4.0% | −8.1% | +4.2 pp | 54.2% | 37.5% | +16.7 |
+| conf ≥ 0.80 | −1.5% | −3.0% | +1.5 pp | 60.0% | 41.7% | +18.3 |
 
-At `conf ≥ 0.80`, v11-full-tb is the first post-audit model to produce a **positive holdout CAGR** (+11.6%) with a **smaller drawdown** (8.2%) than v10 honest (18.4%). The strategy is very selective (58 trades over ~103 active days), so the comparison to v6-prime honest's 23 trades/year is not apples-to-apples, but the direction is unambiguous.
+full beats nopv on real-engine holdout CAGR at every reasonable filter. Win-rate gaps of 15–26 pp are the strongest evidence of real model discrimination. The ablation result stands; only the "positive holdout CAGR" framing was wrong.
 
 ### What this falsifies from the earlier audit conclusions
 
@@ -401,18 +412,18 @@ At `conf ≥ 0.80`, v11-full-tb is the first post-audit model to produce a **pos
 ### What still stands
 
 - The audit-retracted Evals 11/12/17/18 are still retracted. Stage 6 does not re-rehabilitate them.
-- **v6-prime honest (+6.0% CAGR / −18.4% DD / holdout ≈ −5%)** is no longer the nominal best, but it remains the most recent *widely-traded* configuration. v11-full-tb at conf ≥ 0.80 is more selective and has not been deployment-tested.
-- **Holdout is still net-negative at low-filter variants.** Both models lose on raw-long holdout. Live deployment requires the high-confidence filter.
-- **Regime change is a shared failure mode.** Fold 12 (2026 Q1) is catastrophic for both full and nopv. VP features reduce the damage but don't fix it. Walk-forward retrain frequency is the separate lever for that problem.
+- **v6-prime honest (+6.0% full-period CAGR / −18.4% DD / holdout ≈ −5%)** remains the nominal best by full-period compound return. v11-full-tb's best real-engine full-period CAGR is +1.8% at conf≥0.80 — worse than v6-prime on full-period. v11 wins on holdout drawdown shape (1.7% at conf80 vs 18.4% for v6p) and holdout discrimination (60% WR on clean labels), not on compound return.
+- **Holdout is net-negative at every real-engine filter.** Live deployment is not supported by the current numbers. Regime features and/or walk-forward retraining are the levers.
+- **Regime change is a shared failure mode.** Fold 12 (2026 Q1) is catastrophic for both full and nopv. VP features reduce the damage but don't fix it. This is the specific problem that motivates the regime features experiment.
 
 ### Next direction
 
-Phase 3 formally reopens with a concrete direction. The prioritized next experiments are:
+Phase 3 has a validated direction (VP signal exists under clean labels, ablation is clean and direction-stable) but not yet a deployment-ready compound return. The prioritized next experiments are:
 
-1. **Multi-asset v11-full-tb** (BTC + ETH + SOL) — tests whether the VP lift is universal or BTC-specific microstructure. See `LABEL_REDESIGN.md` results section and `MODEL_HISTORY.md` §30-31.
-2. **Walk-forward rolling retraining** — retrain every 3 months; directly attacks the shared holdout collapse.
-3. **Live paper-trading the conf ≥ 0.80 wrapper** around v11-full-tb as a sanity check on the +11.6% holdout CAGR.
+1. **⭐ Regime conditioning features** (GLD + USO + DXY + VIX + FFR level + 90d change + 10Y-2Y yield curve). Directly attacks the fold 12 / regime-change problem. Single variable change on top of validated v11-full-tb. Replaces the earlier "multi-asset BTC+ETH" plan, which was quant-firm-shaped and wrong for the user's deployment shape (individual swing trader). See `MULTI_ASSET_PLAN.md` §REFRAME.
+2. **Walk-forward rolling retraining** — retrain every 3 months; second direct attack on holdout collapse.
+3. **Live paper-trading the conf ≥ 0.80 wrapper** as a sanity check on drawdown shape and win-rate persistence (NOT on CAGR, since the real engine already tells us that's not positive yet).
 
-Full writeup in `experiments/LABEL_REDESIGN.md` (Results — decisive experiment) and `experiments/MODEL_HISTORY.md` §30–31.
+Full writeup in `experiments/LABEL_REDESIGN.md` (Results — decisive experiment, with the retraction block) and `experiments/MODEL_HISTORY.md` §§30–31 (corrected).
 
-**Current project status (2026-04-14):** First positive VP result in project history. v11-full-tb conf≥0.80 produces +11.6% holdout CAGR / 8.2% DD. Phase 3 has a direction. Multi-asset is the next experiment.
+**Current project status (2026-04-14, corrected):** The ablation stands — v11-full beats v11-nopv on every real-engine holdout filter, with 15-26 pp win-rate gaps and +1.5 to +8.5 pp CAGR gaps. VP hypothesis validated. But **the absolute "+11.6% CAGR" claim from the original write-up is retracted** — the real engine shows −1.5% at best. v6-prime honest remains the nominal full-period best by compound return. Next experiment is regime conditioning features, not multi-asset training.

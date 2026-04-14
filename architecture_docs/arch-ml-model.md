@@ -244,21 +244,38 @@ on holdout vs. in-sample, confidence filter is finally informative.**
 | In-sample | 54.16% | 51.55% | +2.62 pp |
 | **Holdout** | **46.83%** | **41.81%** | **+5.02 pp** |
 
-At `conf ≥ 0.80 + 24h cooldown`, v11-full-tb holdout:
-**+11.6% CAGR / 8.2% DD / 58.6% WR across 58 trades.** First positive
-holdout CAGR in the project's history. v11-nopv at the same filter:
-−1.8% CAGR / 40.9% WR. Delta holds at every filter threshold tested.
+**⚠ 2026-04-14 CORRECTION**: the first version of this section reported
+"+11.6% CAGR / 8.2% DD / 58.6% WR across 58 trades. First positive
+holdout CAGR in project history." That was from `analyze_v11_filters.py`
+(label-accurate compound, no fees, active-days annualization). Under
+the real backtest engine (`run_backtest_v11_tb.py`, same engine v6-prime
+honest was produced from), conf ≥ 0.80 holdout is **−1.5% CAGR / −1.7% DD /
+60.0% WR / 20 trades** over the full 278-day holdout. The "first positive
+holdout CAGR" claim is retracted. See `LABEL_REDESIGN.md` §Results for
+the full gap decomposition.
 
-**Validates the Phase 3 central hypothesis**: volume profile features
-carry ML-exploitable signal about support/resistance levels that
-candle features alone cannot capture. The signal is weak (+2–5 pp
-accuracy) but regime-robust — holdout lift exceeds in-sample lift,
-which is the correct shape for a structural feature.
+**Real-engine holdout at conf ≥ 0.80**: v11-full-tb −1.5% CAGR / 1.7% DD /
+60.0% WR / 20 trades. v11-nopv at the same filter: −3.0% CAGR / 3.2% DD /
+41.7% WR / 12 trades. **The ablation Δ is preserved under the real engine
+at every reasonable filter** (+8.5 pp CAGR at conf70, +4.2 pp at conf75,
++1.5 pp at conf80; 15-26 pp win-rate gaps). The central hypothesis is
+supported: VP features carry real per-trade discriminatory signal.
 
-**Still open**: signal magnitude is modest, holdout is only positive
-under a very selective filter, regime-change failure mode (fold 12
-2026 Q1) is shared between full and nopv. Multi-asset extension
-(BTC + ETH + SOL) is the prioritized next experiment.
+**Validates the Phase 3 central hypothesis** (VP features carry ML-
+exploitable signal about support/resistance) in the ablation-Δ sense,
+but the absolute compound return under real frictions is NOT yet
+positive. Holdout drawdown shape is dramatically better (1.7% vs v6-prime
+honest 18.4%), which is the single strongest quantitative argument for
+the representation change going into the regime-features experiment.
+
+**Still open**: signal magnitude per trade is real but small (~0.3% net
+after fees), sample count (20-30 holdout trades) cannot compound into
+positive CAGR over 278 days, regime-change failure mode (fold 12 2026 Q1)
+is shared between full and nopv. **Regime conditioning features**
+(GLD, USO, DXY, VIX, FFR, yield curve) per `MULTI_ASSET_PLAN.md` §REFRAME
+is the prioritized next experiment — NOT multi-asset training on BTC + ETH
+as originally planned before the real-engine backtest review and the
+user's deployment-shape correction.
 
 ## Training principles
 

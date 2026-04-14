@@ -764,27 +764,39 @@ Largest reframing since v6. Three stacked changes:
 
 Artifacts: `src/data/compute_absvp_15m_30d.py`, `src/models/architectures/v11_abs_vp.py`, `src/models/eval_v11.py`, `src/models/analyze_v11_filters.py`, `experiments/eval_v11_results.json`, `experiments/v11_predictions.npz`.
 
-### v11 triple-barrier decisive ablation — **POSITIVE VP RESULT** (2026-04-14)
+### v11 triple-barrier decisive ablation — **POSITIVE ABLATION, retracted CAGR claim** (2026-04-14)
 
-Full writeup in `experiments/LABEL_REDESIGN.md` (Results — decisive experiment), `EVAL_AUDIT.md` §9 Stage 6, and `MODEL_HISTORY.md` §30–31. Summary here for quick reference.
+Full writeup and retraction block in `experiments/LABEL_REDESIGN.md` (Results — decisive experiment), `EVAL_AUDIT.md` §9 Stage 6, and `MODEL_HISTORY.md` §§30–31. Summary here for quick reference.
 
-**The first clean positive VP result in the project's history.** Triple-barrier labels (volatility-scaled symmetric barriers, `k × σ_bar × √H`, 14-day vertical, timeouts dropped) decouple labels from the feature tensor. Running v11-full (with VP) vs v11-nopv (candle only, VP columns zeroed) on identical walk-forward produces:
+**The first clean positive VP ablation under real-engine execution**, but **⚠ the "+11.6% holdout CAGR" claim is retracted** — that came from the analyzer (no fees, active-days annualization). Real-engine conf≥0.80 holdout is **−1.5% CAGR / −1.7% DD / 60.0% WR / 20 trades**. Holdout remains net-negative under realistic frictions.
+
+Triple-barrier labels (volatility-scaled symmetric barriers, `k × σ_bar × √H`, 14-day vertical, timeouts dropped) decouple labels from the feature tensor. v11-full (with VP) vs v11-nopv (candle only, VP columns zeroed):
 
 | | full | nopv | Δ |
 |---|---|---|---|
-| In-sample accuracy | 54.16% | 51.55% | **+2.62 pp** |
-| Holdout accuracy | **46.83%** | 41.81% | **+5.02 pp** |
-| Holdout raw long CAGR | −26.7% | −41.3% | +14.6 pp |
-| Holdout conf≥0.75 CAGR | −5.0% | −14.1% | +9.1 pp |
-| **Holdout conf≥0.80 CAGR** | **+11.6%** | −1.8% | **+13.4 pp** |
-| **Holdout conf≥0.80 DD** | **8.2%** | 4.5% (n=22) | — |
+| In-sample accuracy | 54.16% | 51.55% | +2.62 pp |
+| **Holdout accuracy** | **46.83%** | 41.81% | **+5.02 pp** |
 
-Holdout lift exceeds in-sample lift (+5.02 vs +2.62 pp acc) — VP features generalize better than candle features across regime turns, which is the correct shape for a structural support/resistance feature.
+**Real-engine filter-swept holdout** (from `run_backtest_v11_tb.py`, same engine as v6-prime audited):
 
-At `conf ≥ 0.80 + 24h cooldown`, v11-full triple-barrier reaches **+11.6% holdout CAGR / 58.6% WR / 8.2% DD / 58 trades**. This is the first post-audit experiment to cross zero on holdout CAGR and the first model to produce a holdout drawdown materially smaller than v10 honest's 18.4%. Caveat: the filter is very selective, so it's "silent most of the time, right when it speaks" rather than "consistently profitable across all holdout bars."
+| Filter | full CAGR | nopv CAGR | Δ CAGR | full WR | nopv WR | full DD |
+|---|---|---|---|---|---|---|
+| Raw long | −26.7% | −41.3% | +14.6 pp | 47.7% | 40.4% | 38.8% |
+| conf ≥ 0.70 | −4.0% | −12.5% | **+8.5 pp** | **55.2%** | 29.6% | 4.2% |
+| conf ≥ 0.75 | −4.0% | −8.1% | +4.2 pp | 54.2% | 37.5% | 4.2% |
+| **conf ≥ 0.80** | **−1.5%** | −3.0% | +1.5 pp | **60.0%** | 41.7% | **1.7%** |
 
-**Sign-flip asymmetry** confirms the signal is real: nopv's sign-flip (−14.4% CAGR / 50.2% WR) meaningfully beats its raw long (−41.3% / 40.4%), meaning the candle-only model is actively anti-aligned with truth on holdout. full's sign-flip is roughly neutral relative to raw long — full carries a small positive directional bias, which the confidence filter amplifies into positive EV.
+Holdout accuracy lift (+5.02 pp) exceeds in-sample lift (+2.62 pp) — VP features generalize better than candle features across regime turns, which is the correct shape for a structural support/resistance feature. This is preserved under the real engine.
 
-**What this means for Phase 3**: the central hypothesis (VP features carry ML-exploitable support/resistance signal) is **supported for the first time**. The representation change v11 introduced was correct; the v11-range rejection was a label problem, not a feature problem. Phase 3 has a direction for the first time since the 2026-04-12 audit.
+**What's real under the real engine**:
+- full beats nopv on every reasonable filter by 1.5-8.5 pp CAGR and 7-26 pp win rate.
+- v11-full-tb conf≥0.80 holdout drawdown is 1.7% — vs v6-prime honest 18.4%. Order-of-magnitude tighter.
+- 60.0% win rate at conf≥0.80 is clean of the 55.9% class prior.
 
-Artifacts: `experiments/eval_v11_11_tb_full_results.json`, `experiments/eval_v11_11_tb_nopv_results.json`, `experiments/v11_11_tb_full_predictions.npz`, `experiments/v11_11_tb_nopv_predictions.npz`.
+**What's NOT real (retracted)**:
+- "First positive holdout CAGR in project history" — analyzer-only. Real engine is −1.5% at best. Gap decomposition: ~7.6 pp from active-days vs full-window annualization, ~2.5 pp from fees/slippage, ~0.5 pp from reserve sizing, residual from fold 12 variance on 20 trades.
+- "v11 beats v6-prime honest on CAGR" — v6-prime honest was +6.0% full-period (real engine); v11-full-tb is +1.8% full-period at conf≥0.80. v11 is WORSE on full-period CAGR, not better. The v11 win is in drawdown shape and holdout discrimination, not compound return.
+
+**What this means for Phase 3**: the central hypothesis (VP features carry ML-exploitable support/resistance signal) is **supported for the first time** under real execution — the ablation Δ is unambiguously positive at every reasonable filter. But the magnitude isn't deployment-ready. Sample count is the binding constraint: 20-30 trades × ~0.3% net EV per trade cannot compound into positive CAGR after fees over 278 days. The next experiment (regime conditioning features per `MULTI_ASSET_PLAN.md` §REFRAME) attacks the fold 12 / regime-change problem directly, which is the specific thing dragging holdout CAGR negative for both full and nopv.
+
+Artifacts: `experiments/eval_v11_11_tb_full_results.json`, `experiments/eval_v11_11_tb_nopv_results.json`, `experiments/v11_11_tb_full_predictions.npz`, `experiments/v11_11_tb_nopv_predictions.npz`, `experiments/backtest_results_v11_tb.json` (real-engine source of truth).
