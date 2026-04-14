@@ -1,10 +1,11 @@
 """Eval v11 — absolute-range VP @ 15m × 90-day temporal window.
 
-The "final iteration" for Phase 3:
+The "experimental playground" for Phase 3 post-audit:
   - Feature source: BTC_15m_ABSVP_30d.csv (visible-range VP, self-channel,
     continuous price_pos + range_pct scalars).
-  - Architecture:   AbsVPv11 (2-channel spatial attention, otherwise same
-    2+1 transformer shape as v10).
+  - Architecture:   AbsVPv11 (2-channel spatial attention). Spatial and
+    temporal layer counts are tunable via CLI flags — default 1+1 mirrors
+    v10's 2+1 proportions but at half the capacity.
   - Labels:         range-derived TP/SL, first-hit, long-only.
     TP = (window_hi − close) / close × 0.8, clipped to [1%, 15%]
     SL = (close − window_lo) / close × 0.6, clipped to [1%, 15%]
@@ -15,9 +16,18 @@ The "final iteration" for Phase 3:
     DataLoader, no num_workers, no per-batch CPU↔GPU copies.
 
 Usage (Colab, H100/A100):
+    # default: 1 spatial + 1 temporal, tag='11'
     !python3 -m src.models.eval_v11
+
+    # 2+1 variant:
+    !python3 -m src.models.eval_v11 --spatial 2 --temporal 1 --tag 21
+
+    # tagged outputs land in:
+    #   experiments/eval_v11_{tag}_results.json
+    #   experiments/v11_{tag}_predictions.npz
 """
 
+import argparse
 import json
 import sys
 import time
@@ -38,8 +48,14 @@ from src.models.architectures.v11_abs_vp import AbsVPv11
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 CSV_PATH = PROJECT_ROOT / "BTC_15m_ABSVP_30d.csv"
 EXPERIMENTS_DIR = PROJECT_ROOT / "experiments"
-RESULTS_PATH = EXPERIMENTS_DIR / "eval_v11_results.json"
-PREDICTIONS_PATH = EXPERIMENTS_DIR / "v11_predictions.npz"
+
+
+def _results_path(tag: str) -> Path:
+    return EXPERIMENTS_DIR / f"eval_v11_{tag}_results.json"
+
+
+def _predictions_path(tag: str) -> Path:
+    return EXPERIMENTS_DIR / f"v11_{tag}_predictions.npz"
 
 # Resolution-specific
 BARS_PER_DAY = 96                      # 15m
@@ -312,12 +328,18 @@ def train_one_seed(
     val_idx: torch.Tensor,
     day_rows_gpu, last_bar_gpu, labels_gpu, day_offsets,
     device, use_amp: bool, pos_weight: torch.Tensor,
+    n_spatial: int, n_temporal: int,
 ):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    model = AbsVPv11(n_days=N_DAYS, dropout=DROPOUT).to(device)
+    model = AbsVPv11(
+        n_days=N_DAYS,
+        n_spatial_layers=n_spatial,
+        n_temporal_layers=n_temporal,
+        dropout=DROPOUT,
+    ).to(device)
     try:
         model = torch.compile(model)
     except Exception:
@@ -427,7 +449,30 @@ def count_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+def parse_args():
+    p = argparse.ArgumentParser(description="v11 walk-forward eval")
+    p.add_argument("--spatial", type=int, default=1,
+                   help="number of spatial transformer layers (default 1)")
+    p.add_argument("--temporal", type=int, default=1,
+                   help="number of temporal transformer layers (default 1)")
+    p.add_argument("--tag", type=str, default=None,
+                   help="output filename suffix. defaults to '{spatial}{temporal}' "
+                        "so --spatial 2 --temporal 1 → tag '21'")
+    p.add_argument("--seeds", type=int, default=N_SEEDS,
+                   help=f"seeds per fold (default {N_SEEDS})")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
+    n_spatial = args.spatial
+    n_temporal = args.temporal
+    tag = args.tag if args.tag is not None else f"{n_spatial}{n_temporal}"
+    n_seeds = args.seeds
+
+    results_path = _results_path(tag)
+    predictions_path = _predictions_path(tag)
+
     device = get_device()
     use_amp = device.type == "cuda"
     print(f"Device: {device}")
@@ -443,13 +488,16 @@ def main():
 
     print("\nConfig:")
     print(f"  CSV:         {CSV_PATH.name}")
+    print(f"  Layers:      spatial={n_spatial}  temporal={n_temporal}  tag={tag}")
     print(f"  N_DAYS:      {N_DAYS}  (lookback {LOOKBACK_BARS} bars @ 15m)")
     print(f"  LABEL_MAX:   {LABEL_MAX_BARS} bars (14 days)")
     print(f"  EMBARGO:     {EMBARGO}")
     print(f"  BATCH:       {BATCH_SIZE}")
     print(f"  LR:          {LR}  (AdamW, wd={WEIGHT_DECAY})")
     print(f"  Dropout:     {DROPOUT}, label_smoothing={LABEL_SMOOTHING}")
-    print(f"  Seeds/fold:  {N_SEEDS}, SWA from epoch {SWA_START_EPOCH}")
+    print(f"  Seeds/fold:  {n_seeds}, SWA from epoch {SWA_START_EPOCH}")
+    print(f"  Results →    {results_path.name}")
+    print(f"  Preds   →    {predictions_path.name}")
 
     # ─── Load + build features ───
     feats = build_features(CSV_PATH)
@@ -497,7 +545,12 @@ def main():
     all_tp, all_sl = [], []
 
     # Build a param count + sample/param diagnostic before starting
-    probe = AbsVPv11(n_days=N_DAYS, dropout=DROPOUT)
+    probe = AbsVPv11(
+        n_days=N_DAYS,
+        n_spatial_layers=n_spatial,
+        n_temporal_layers=n_temporal,
+        dropout=DROPOUT,
+    )
     n_params = count_params(probe)
     print(f"\nModel params: {n_params:,}")
     del probe
@@ -542,13 +595,14 @@ def main():
         print(f"    pos_weight: {pos_weight.item():.3f}")
 
         seed_logits = []
-        for seed_offset in range(N_SEEDS):
+        for seed_offset in range(n_seeds):
             seed = 42 + seed_offset
             print(f"    [Seed {seed}]")
             model = train_one_seed(
                 seed, train_idx, val_idx,
                 day_rows_gpu, last_bar_gpu, labels_gpu, day_offsets,
                 device, use_amp, pos_weight,
+                n_spatial=n_spatial, n_temporal=n_temporal,
             )
             fold_logits = evaluate(
                 model, test_idx,
@@ -621,8 +675,12 @@ def main():
     # ─── Save results + predictions ───
     EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
     summary = {
-        "eval": "v11 — absolute-range VP @ 15m × 90-day temporal",
+        "eval": f"v11 tag={tag} — absolute-range VP @ 15m × 90-day temporal",
         "csv": CSV_PATH.name,
+        "n_spatial_layers": n_spatial,
+        "n_temporal_layers": n_temporal,
+        "tag": tag,
+        "n_seeds": n_seeds,
         "n_days": N_DAYS,
         "bars_per_day": BARS_PER_DAY,
         "label_max_bars": LABEL_MAX_BARS,
@@ -632,10 +690,10 @@ def main():
         "total_time_min": round(total_time / 60, 1),
         "folds": all_results,
     }
-    with open(RESULTS_PATH, "w") as f:
+    with open(results_path, "w") as f:
         json.dump(summary, f, indent=2)
     np.savez_compressed(
-        PREDICTIONS_PATH,
+        predictions_path,
         preds=np.array(all_preds),
         labels=np.array(all_labels),
         logits=np.array(all_logits),
@@ -644,8 +702,8 @@ def main():
         tp_pct=np.array(all_tp),
         sl_pct=np.array(all_sl),
     )
-    print(f"\nWrote {RESULTS_PATH}")
-    print(f"Wrote {PREDICTIONS_PATH}")
+    print(f"\nWrote {results_path}")
+    print(f"Wrote {predictions_path}")
 
 
 if __name__ == "__main__":
