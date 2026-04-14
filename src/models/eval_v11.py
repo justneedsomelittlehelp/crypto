@@ -49,7 +49,9 @@ LABEL_MAX_BARS = 14 * BARS_PER_DAY     # 1344 bars = 14 days
 EMBARGO = pd.Timedelta(days=14)        # wall-clock, resolution-independent
 
 # Training
-BATCH_SIZE = 1024
+BATCH_SIZE = 512     # Cap: spatial attention flattens (B, n_days) → B*90
+                     # must stay ≤ 65535 (efficient-attention kernel limit).
+                     # 512*90 = 46,080 — safe margin.
 LR = 5e-4
 WEIGHT_DECAY = 1e-3
 LABEL_SMOOTHING = 0.1
