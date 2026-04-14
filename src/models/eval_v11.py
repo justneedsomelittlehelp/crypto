@@ -78,11 +78,31 @@ N_SEEDS = 1          # Single seed for the first go/no-go run. Bump to 3
                      # for a final reported number if v11 shows signal.
 SWA_START_EPOCH = 15
 
-# Label formula (mirrors v6-prime ratios; source features differ)
+# Range-derived label formula (mirrors v6-prime ratios; source features differ).
+# See experiments/LABEL_REDESIGN.md for why this formula produces a structural
+# label leak (asym/label coupling) and why triple-barrier is the next step.
 TP_RATIO = 0.8
 SL_RATIO = 0.6
 TP_MIN, TP_MAX = 0.01, 0.15
 SL_MIN, SL_MAX = 0.01, 0.15
+
+# Triple-barrier (volatility-scaled) label parameters — López de Prado Ch. 3.
+# Barriers are symmetric and scaled from trailing return volatility, so
+# labels become functions of (close, σ_t, forward path) only, with no shared
+# inputs with the VP / range feature columns.
+#
+# CRITICAL: σ_t is computed on 15m log-returns, which have ~0.003 stdev. A
+# raw `k × σ_t(15m)` barrier is ~0.6% and gets hit in a few bars — labels
+# collapse to noise. We scale by √H where H is the trading horizon in bars
+# (standard square-root-of-time vol scaling) so the barrier reflects the
+# expected move over a meaningful holding period rather than the next bar.
+TB_VOL_WINDOW = 288         # rolling stdev over 288 bars (3 days @ 15m) —
+                            # smoother σ estimate than 96-bar window
+TB_HORIZON_BARS = 96        # 1 day — barriers sized to typical daily move
+TB_BARRIER_K = 2.0          # k × (σ_t × √H). With σ(15m)≈0.003 and H=96,
+                            # barrier ≈ 2 × 0.003 × 9.8 ≈ 6%, meaningful.
+TB_BARRIER_MIN = 0.01       # floor (1%) — keeps labels informative in calm
+TB_BARRIER_MAX = 0.15       # ceiling (15%) — match range-label cap
 
 # Same calendar boundaries as v6-prime / v10.
 FOLD_BOUNDARIES = [
@@ -108,11 +128,21 @@ def get_device() -> torch.device:
 # ═══════════════════════════════════════════════════════════════════
 # Feature construction — run once on CPU, uploaded to GPU as flat tensors.
 # ═══════════════════════════════════════════════════════════════════
-def build_features(csv_path: Path):
+def build_features(csv_path: Path, labels_mode: str = "range", features_mode: str = "full"):
     """Load CSV and return flat numpy arrays ready for GPU upload.
 
+    Args:
+        csv_path:     path to BTC_15m_ABSVP_30d.csv
+        labels_mode:  "range" (v11 range-derived TP/SL, has geometric leak)
+                      or "triple_barrier" (volatility-scaled symmetric barriers)
+        features_mode: "full"  → full day-token (vp + self + candle + scalars)
+                       "nopv" → vp/self/scalar columns zeroed out, only candle
+                                features carry information. Used for the VP
+                                ablation described in LABEL_REDESIGN.md.
+
     Returns dict with:
-      day_rows:   (N, 110) float32 — per-bar "day token" row (vp+self+candle+scalars)
+      day_rows:   (N, 110) float32 — per-bar "day token" row. With features_mode
+                                     == "nopv" the VP/self/scalar slots are 0.
       last_bar:   (N, 4)   float32 — per-bar last-bar features
       close:      (N,)     float64 — per-bar close (for label computation)
       dates:      (N,)     datetime64[ns, UTC]
@@ -120,6 +150,8 @@ def build_features(csv_path: Path):
       tp_pct:     (N,)     float32 — per-sample TP, NaN where invalid
       sl_pct:     (N,)     float32 — per-sample SL, NaN where invalid
     """
+    assert labels_mode in ("range", "triple_barrier"), labels_mode
+    assert features_mode in ("full", "nopv"), features_mode
     print(f"Loading {csv_path.name} ...")
     df = pd.read_csv(csv_path)
     df["date"] = pd.to_datetime(df["date"], utc=True)
@@ -209,13 +241,36 @@ def build_features(csv_path: Path):
     scalars = np.stack([price_pos, range_pct], axis=1)
     day_rows = np.concatenate([vp_abs, self_ch, candle, scalars], axis=1).astype(np.float32)
 
+    # Feature ablation: zero out VP bins, self channel, price_pos, range_pct.
+    # Leaves only the 8 candle features carrying any signal through the day
+    # token. The model shape stays the same (same bin_embed, same spatial
+    # transformer) so results are directly comparable to the "full" run.
+    # See LABEL_REDESIGN.md for the ablation rationale.
+    if features_mode == "nopv":
+        day_rows[:, 0:50] = 0.0            # vp_abs
+        day_rows[:, 50:100] = 0.0          # self_ch
+        day_rows[:, 108:110] = 0.0         # price_pos, range_pct
+        # last_bar's price_pos/range_pct slots (indices 2, 3) also zeroed so
+        # the final-FC path can't sneak in range-derived info either.
+        print("  features_mode=nopv: VP/self/scalar columns zeroed.")
+
     # ─── Pack last_bar: (N, 4) = log_return, volume_ratio, price_pos, range_pct ───
     last_bar = np.stack([log_return, volume_ratio, price_pos, range_pct], axis=1).astype(np.float32)
+    if features_mode == "nopv":
+        last_bar[:, 2:4] = 0.0             # zero price_pos / range_pct here too
 
     # ─── Labels ───
-    print("  Computing range-derived TP/SL first-hit labels...")
-    t0 = time.time()
-    labels, tp_pct, sl_pct = compute_labels(close, win_hi, win_lo)
+    if labels_mode == "range":
+        print("  Computing range-derived TP/SL first-hit labels...")
+        t0 = time.time()
+        labels, tp_pct, sl_pct = compute_labels_range(close, win_hi, win_lo)
+    else:
+        print(
+            f"  Computing triple-barrier labels (k={TB_BARRIER_K}, "
+            f"vol_window={TB_VOL_WINDOW}b = {TB_VOL_WINDOW / BARS_PER_DAY:.1f}d)..."
+        )
+        t0 = time.time()
+        labels, tp_pct, sl_pct = compute_labels_triple_barrier(close)
     n_valid = int(np.sum(~np.isnan(labels)))
     n_pos = int(np.nansum(labels == 1))
     n_neg = int(np.nansum(labels == 0))
@@ -236,7 +291,7 @@ def build_features(csv_path: Path):
     }
 
 
-def compute_labels(close: np.ndarray, win_hi: np.ndarray, win_lo: np.ndarray):
+def compute_labels_range(close: np.ndarray, win_hi: np.ndarray, win_lo: np.ndarray):
     """Range-derived long-only TP/SL first-hit labels.
 
     For each bar i:
@@ -280,6 +335,102 @@ def compute_labels(close: np.ndarray, win_hi: np.ndarray, win_lo: np.ndarray):
         if tp_first <= len(future) or sl_first <= len(future):
             labels[i] = 1.0 if tp_first < sl_first else 0.0
 
+    return labels, tp_arr, sl_arr
+
+
+def compute_labels_triple_barrier(close: np.ndarray):
+    """Volatility-scaled symmetric triple-barrier labels (López de Prado Ch. 3).
+
+    For each bar i:
+      σ_t = rolling stdev of log(close[t]/close[t-1]) over TB_VOL_WINDOW bars
+      barrier_pct = clip(TB_BARRIER_K × σ_t, TB_BARRIER_MIN, TB_BARRIER_MAX)
+      TP_level = close[i] × (1 + barrier_pct)
+      SL_level = close[i] × (1 − barrier_pct)
+      Scan closes[i+1 : i+1+LABEL_MAX_BARS] for first touch.
+      Label:
+        +1 if TP hit first
+         0 if SL hit first
+        NaN if neither hit by the vertical barrier (timeout — dropped from
+             training so the model only sees resolved examples)
+
+    This decouples labels from the feature tensor: `close`, σ_t, and the
+    forward price path are the only inputs to the label. None of those
+    overlap with vp_abs / self / window_hi / window_lo / price_pos / range_pct,
+    so the v11 feature tensor and the label no longer share inputs.
+
+    Notes:
+      - Barriers are SYMMETRIC — TP_pct = SL_pct = barrier_pct. The
+        asymmetry ratio used by the range-label filters is therefore
+        always exactly 1.0 under this mode; any "asymmetry filter" in
+        analyze_v11_filters becomes a no-op (that's correct — the filter
+        only existed to work around range-label geometry).
+      - "barrier_pct" is stored in both tp_pct and sl_pct so the filter
+        analyzer computes real EV (profitable trade = +barrier_pct,
+        losing trade = −barrier_pct).
+    """
+    n = len(close)
+    labels = np.full(n, np.nan, dtype=np.float32)
+    tp_arr = np.full(n, np.nan, dtype=np.float32)
+    sl_arr = np.full(n, np.nan, dtype=np.float32)
+
+    # σ_t: rolling std of 15m log-returns over TB_VOL_WINDOW bars
+    log_ret = np.zeros(n, dtype=np.float64)
+    log_ret[1:] = np.log(close[1:] / close[:-1])
+    sigma_bar = (
+        pd.Series(log_ret)
+        .rolling(TB_VOL_WINDOW, min_periods=TB_VOL_WINDOW)
+        .std()
+        .values
+    )
+
+    # Time-scale to horizon: σ over H bars ≈ σ per bar × √H (Brownian/IID
+    # assumption, standard square-root-of-time vol scaling).
+    sigma_horizon = sigma_bar * np.sqrt(TB_HORIZON_BARS)
+    barrier = np.clip(TB_BARRIER_K * sigma_horizon, TB_BARRIER_MIN, TB_BARRIER_MAX)
+
+    n_timeout = 0
+    n_tp = 0
+    n_sl = 0
+    warmup = TB_VOL_WINDOW + 1
+
+    for i in range(warmup, n - 1):
+        b = barrier[i]
+        if not np.isfinite(b) or b <= 0:
+            continue
+
+        c = close[i]
+        tp_level = c * (1 + b)
+        sl_level = c * (1 - b)
+
+        end = min(i + 1 + LABEL_MAX_BARS, n)
+        future = close[i + 1:end]
+        if len(future) == 0:
+            continue
+
+        tp_hits = future >= tp_level
+        sl_hits = future <= sl_level
+        tp_first = np.argmax(tp_hits) if tp_hits.any() else len(future) + 1
+        sl_first = np.argmax(sl_hits) if sl_hits.any() else len(future) + 1
+
+        tp_arr[i] = b
+        sl_arr[i] = b
+
+        if tp_first > len(future) and sl_first > len(future):
+            # Timeout: dropped from training, stays NaN in labels array
+            n_timeout += 1
+            continue
+
+        if tp_first < sl_first:
+            labels[i] = 1.0
+            n_tp += 1
+        else:
+            labels[i] = 0.0
+            n_sl += 1
+
+    print(
+        f"    Triple-barrier resolution: TP={n_tp:,}  SL={n_sl:,}  "
+        f"timeout={n_timeout:,}  resolved_rate={(n_tp + n_sl) / max(n_tp + n_sl + n_timeout, 1) * 100:.1f}%"
+    )
     return labels, tp_arr, sl_arr
 
 
@@ -455,9 +606,20 @@ def parse_args():
                    help="number of spatial transformer layers (default 1)")
     p.add_argument("--temporal", type=int, default=1,
                    help="number of temporal transformer layers (default 1)")
+    p.add_argument("--labels", choices=["range", "triple_barrier"], default="range",
+                   help="label formula. 'range' = v11 original range-derived "
+                        "(LEAKS geometry into labels, see LABEL_REDESIGN.md). "
+                        "'triple_barrier' = volatility-scaled symmetric "
+                        "barriers (decoupled from features, recommended).")
+    p.add_argument("--features", choices=["full", "nopv"], default="full",
+                   help="feature set. 'full' = vp_abs + self + price_pos + "
+                        "range_pct + candle. 'nopv' = candle only (VP/self/"
+                        "scalar columns zeroed). Use for the v11-full vs "
+                        "v11-nopv decisive ablation under triple-barrier.")
     p.add_argument("--tag", type=str, default=None,
-                   help="output filename suffix. defaults to '{spatial}{temporal}' "
-                        "so --spatial 2 --temporal 1 → tag '21'")
+                   help="output filename suffix. defaults to '{s}{t}' when "
+                        "labels=range + features=full, otherwise expands to "
+                        "'{s}{t}_{labels}_{features}' for unambiguous runs.")
     p.add_argument("--seeds", type=int, default=N_SEEDS,
                    help=f"seeds per fold (default {N_SEEDS})")
     return p.parse_args()
@@ -467,7 +629,16 @@ def main():
     args = parse_args()
     n_spatial = args.spatial
     n_temporal = args.temporal
-    tag = args.tag if args.tag is not None else f"{n_spatial}{n_temporal}"
+    labels_mode = args.labels
+    features_mode = args.features
+    if args.tag is not None:
+        tag = args.tag
+    elif labels_mode == "range" and features_mode == "full":
+        tag = f"{n_spatial}{n_temporal}"
+    else:
+        short_lbl = {"range": "rng", "triple_barrier": "tb"}[labels_mode]
+        short_feat = {"full": "full", "nopv": "nopv"}[features_mode]
+        tag = f"{n_spatial}{n_temporal}_{short_lbl}_{short_feat}"
     n_seeds = args.seeds
 
     results_path = _results_path(tag)
@@ -489,6 +660,8 @@ def main():
     print("\nConfig:")
     print(f"  CSV:         {CSV_PATH.name}")
     print(f"  Layers:      spatial={n_spatial}  temporal={n_temporal}  tag={tag}")
+    print(f"  Labels:      {labels_mode}")
+    print(f"  Features:    {features_mode}")
     print(f"  N_DAYS:      {N_DAYS}  (lookback {LOOKBACK_BARS} bars @ 15m)")
     print(f"  LABEL_MAX:   {LABEL_MAX_BARS} bars (14 days)")
     print(f"  EMBARGO:     {EMBARGO}")
@@ -500,7 +673,7 @@ def main():
     print(f"  Preds   →    {predictions_path.name}")
 
     # ─── Load + build features ───
-    feats = build_features(CSV_PATH)
+    feats = build_features(CSV_PATH, labels_mode=labels_mode, features_mode=features_mode)
     day_rows = feats["day_rows"]
     last_bar = feats["last_bar"]
     labels_np = feats["labels"]
@@ -679,12 +852,16 @@ def main():
         "csv": CSV_PATH.name,
         "n_spatial_layers": n_spatial,
         "n_temporal_layers": n_temporal,
+        "labels_mode": labels_mode,
+        "features_mode": features_mode,
         "tag": tag,
         "n_seeds": n_seeds,
         "n_days": N_DAYS,
         "bars_per_day": BARS_PER_DAY,
         "label_max_bars": LABEL_MAX_BARS,
         "embargo_days": 14,
+        "triple_barrier_k": TB_BARRIER_K if labels_mode == "triple_barrier" else None,
+        "triple_barrier_vol_window": TB_VOL_WINDOW if labels_mode == "triple_barrier" else None,
         "n_params": n_params,
         "overall_acc": overall_acc,
         "total_time_min": round(total_time / 60, 1),
