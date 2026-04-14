@@ -1,0 +1,129 @@
+{
+  "eval": "v11 tag=11_tb_nopv \u2014 absolute-range VP @ 15m \u00d7 90-day temporal",
+  "csv": "BTC_15m_ABSVP_30d.csv",
+  "n_spatial_layers": 1,
+  "n_temporal_layers": 1,
+  "labels_mode": "triple_barrier",
+  "features_mode": "nopv",
+  "tag": "11_tb_nopv",
+  "n_seeds": 1,
+  "n_days": 90,
+  "bars_per_day": 96,
+  "label_max_bars": 1344,
+  "embargo_days": 14,
+  "triple_barrier_k": 2.0,
+  "triple_barrier_vol_window": 288,
+  "n_params": 25601,
+  "overall_acc": 0.5022240545056089,
+  "total_time_min": 84.4,
+  "folds": [
+    {
+      "fold": 1,
+      "period": "2020-07-01 \u2192 2021-01-01",
+      "n_test": 16278,
+      "acc": 0.6152475734119671,
+      "n_long": 11040,
+      "long_ev_real": 3.586433172225952,
+      "time_sec": 141.4
+    },
+    {
+      "fold": 2,
+      "period": "2021-01-01 \u2192 2021-07-01",
+      "n_test": 16106,
+      "acc": 0.4529367937414628,
+      "n_long": 8469,
+      "long_ev_real": -0.813616156578064,
+      "time_sec": 479.2
+    },
+    {
+      "fold": 3,
+      "period": "2021-07-01 \u2192 2022-01-01",
+      "n_test": 16197,
+      "acc": 0.5007100080261777,
+      "n_long": 9391,
+      "long_ev_real": 1.0487290620803833,
+      "time_sec": 313.3
+    },
+    {
+      "fold": 4,
+      "period": "2022-01-01 \u2192 2022-07-01",
+      "n_test": 16253,
+      "acc": 0.43715006460345784,
+      "n_long": 10177,
+      "long_ev_real": -1.4037058353424072,
+      "time_sec": 316.1
+    },
+    {
+      "fold": 5,
+      "period": "2022-07-01 \u2192 2023-01-01",
+      "n_test": 14858,
+      "acc": 0.39278503163279044,
+      "n_long": 4294,
+      "long_ev_real": -2.0360021591186523,
+      "time_sec": 399.1
+    },
+    {
+      "fold": 6,
+      "period": "2023-01-01 \u2192 2023-07-01",
+      "n_test": 15032,
+      "acc": 0.5548829164449175,
+      "n_long": 8638,
+      "long_ev_real": 1.0162261724472046,
+      "time_sec": 316.4
+    },
+    {
+      "fold": 7,
+      "period": "2023-07-01 \u2192 2024-01-01",
+      "n_test": 15636,
+      "acc": 0.5797518546942952,
+      "n_long": 10420,
+      "long_ev_real": 1.142291784286499,
+      "time_sec": 573.3
+    },
+    {
+      "fold": 8,
+      "period": "2024-01-01 \u2192 2024-07-01",
+      "n_test": 16321,
+      "acc": 0.5268672262729,
+      "n_long": 11129,
+      "long_ev_real": 0.5502371788024902,
+      "time_sec": 545.4
+    },
+    {
+      "fold": 9,
+      "period": "2024-07-01 \u2192 2025-01-01",
+      "n_test": 16592,
+      "acc": 0.5339922854387656,
+      "n_long": 7723,
+      "long_ev_real": 2.1205735206604004,
+      "time_sec": 387.6
+    },
+    {
+      "fold": 10,
+      "period": "2025-01-01 \u2192 2025-07-01",
+      "n_test": 15976,
+      "acc": 0.5548948422633951,
+      "n_long": 8930,
+      "long_ev_real": 0.5645956993103027,
+      "time_sec": 491.4
+    },
+    {
+      "fold": 11,
+      "period": "2025-07-01 \u2192 2026-01-01",
+      "n_test": 16349,
+      "acc": 0.4511590922992232,
+      "n_long": 7204,
+      "long_ev_real": -0.7388945817947388,
+      "time_sec": 605.1
+    },
+    {
+      "fold": 12,
+      "period": "2026-01-01 \u2192 2026-04-08",
+      "n_test": 8750,
+      "acc": 0.35622857142857145,
+      "n_long": 2796,
+      "long_ev_real": -2.9771862030029297,
+      "time_sec": 494.3
+    }
+  ]
+}

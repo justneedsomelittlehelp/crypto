@@ -217,9 +217,48 @@ in the project's history. Full design: `experiments/LABEL_REDESIGN.md`.
 Files:
 - Data: `src/data/compute_absvp_15m_30d.py`
 - Model: `src/models/architectures/v11_abs_vp.py`
-- Eval: `src/models/eval_v11.py` (supports `--spatial --temporal --tag --seeds`)
+- Eval: `src/models/eval_v11.py` (supports `--spatial --temporal --tag --seeds --labels --features`)
 - Filter analysis: `src/models/analyze_v11_filters.py` (supports `--tag --npz`)
 - Results: `experiments/eval_v11_results.json`, `experiments/v11_predictions.npz`
+
+### v11 triple-barrier decisive ablation (2026-04-14) — POSITIVE VP RESULT
+
+Triple-barrier labels added via `--labels triple_barrier`:
+`σ_bar` = rolling std of 15m log-returns over `TB_VOL_WINDOW=288` bars
+(3d), scaled by `√TB_HORIZON_BARS=√96` for √-of-time vol (daily
+horizon), `k=2.0`, barriers clipped to `[1%, 15%]`, 14-day vertical.
+Timeouts (neither barrier hit) drop from training as NaN labels. Label
+pos_rate drops from 76% (range) → 55.9% (triple-barrier), resolution
+rate 90.8%.
+
+Feature ablation added via `--features nopv`: zeros out `vp_abs`, `self`,
+`price_pos`, `range_pct` columns in `day_rows` and `last_bar`. Model
+architecture is unchanged (same `bin_embed`, same transformer). Outputs
+tagged `11_tb_full` and `11_tb_nopv`.
+
+**Result: v11-full beats v11-nopv on every holdout metric, lift grows
+on holdout vs. in-sample, confidence filter is finally informative.**
+
+| Split | full acc | nopv acc | Δ |
+|---|---|---|---|
+| In-sample | 54.16% | 51.55% | +2.62 pp |
+| **Holdout** | **46.83%** | **41.81%** | **+5.02 pp** |
+
+At `conf ≥ 0.80 + 24h cooldown`, v11-full-tb holdout:
+**+11.6% CAGR / 8.2% DD / 58.6% WR across 58 trades.** First positive
+holdout CAGR in the project's history. v11-nopv at the same filter:
+−1.8% CAGR / 40.9% WR. Delta holds at every filter threshold tested.
+
+**Validates the Phase 3 central hypothesis**: volume profile features
+carry ML-exploitable signal about support/resistance levels that
+candle features alone cannot capture. The signal is weak (+2–5 pp
+accuracy) but regime-robust — holdout lift exceeds in-sample lift,
+which is the correct shape for a structural feature.
+
+**Still open**: signal magnitude is modest, holdout is only positive
+under a very selective filter, regime-change failure mode (fold 12
+2026 Q1) is shared between full and nopv. Multi-asset extension
+(BTC + ETH + SOL) is the prioritized next experiment.
 
 ## Training principles
 

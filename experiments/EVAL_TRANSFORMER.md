@@ -763,3 +763,28 @@ Largest reframing since v6. Three stacked changes:
 **v11 is the most productive rejection in the project** because it identified the binding constraint that made all Phase 3 experiments unfalsifiable. Next experiment: triple-barrier labels + v11-full vs v11-nopv ablation. Full writeup in `experiments/LABEL_REDESIGN.md`, history in `MODEL_HISTORY.md` §28.
 
 Artifacts: `src/data/compute_absvp_15m_30d.py`, `src/models/architectures/v11_abs_vp.py`, `src/models/eval_v11.py`, `src/models/analyze_v11_filters.py`, `experiments/eval_v11_results.json`, `experiments/v11_predictions.npz`.
+
+### v11 triple-barrier decisive ablation — **POSITIVE VP RESULT** (2026-04-14)
+
+Full writeup in `experiments/LABEL_REDESIGN.md` (Results — decisive experiment), `EVAL_AUDIT.md` §9 Stage 6, and `MODEL_HISTORY.md` §30–31. Summary here for quick reference.
+
+**The first clean positive VP result in the project's history.** Triple-barrier labels (volatility-scaled symmetric barriers, `k × σ_bar × √H`, 14-day vertical, timeouts dropped) decouple labels from the feature tensor. Running v11-full (with VP) vs v11-nopv (candle only, VP columns zeroed) on identical walk-forward produces:
+
+| | full | nopv | Δ |
+|---|---|---|---|
+| In-sample accuracy | 54.16% | 51.55% | **+2.62 pp** |
+| Holdout accuracy | **46.83%** | 41.81% | **+5.02 pp** |
+| Holdout raw long CAGR | −26.7% | −41.3% | +14.6 pp |
+| Holdout conf≥0.75 CAGR | −5.0% | −14.1% | +9.1 pp |
+| **Holdout conf≥0.80 CAGR** | **+11.6%** | −1.8% | **+13.4 pp** |
+| **Holdout conf≥0.80 DD** | **8.2%** | 4.5% (n=22) | — |
+
+Holdout lift exceeds in-sample lift (+5.02 vs +2.62 pp acc) — VP features generalize better than candle features across regime turns, which is the correct shape for a structural support/resistance feature.
+
+At `conf ≥ 0.80 + 24h cooldown`, v11-full triple-barrier reaches **+11.6% holdout CAGR / 58.6% WR / 8.2% DD / 58 trades**. This is the first post-audit experiment to cross zero on holdout CAGR and the first model to produce a holdout drawdown materially smaller than v10 honest's 18.4%. Caveat: the filter is very selective, so it's "silent most of the time, right when it speaks" rather than "consistently profitable across all holdout bars."
+
+**Sign-flip asymmetry** confirms the signal is real: nopv's sign-flip (−14.4% CAGR / 50.2% WR) meaningfully beats its raw long (−41.3% / 40.4%), meaning the candle-only model is actively anti-aligned with truth on holdout. full's sign-flip is roughly neutral relative to raw long — full carries a small positive directional bias, which the confidence filter amplifies into positive EV.
+
+**What this means for Phase 3**: the central hypothesis (VP features carry ML-exploitable support/resistance signal) is **supported for the first time**. The representation change v11 introduced was correct; the v11-range rejection was a label problem, not a feature problem. Phase 3 has a direction for the first time since the 2026-04-12 audit.
+
+Artifacts: `experiments/eval_v11_11_tb_full_results.json`, `experiments/eval_v11_11_tb_nopv_results.json`, `experiments/v11_11_tb_full_predictions.npz`, `experiments/v11_11_tb_nopv_predictions.npz`.

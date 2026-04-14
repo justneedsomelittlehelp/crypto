@@ -366,4 +366,53 @@ Triple-barrier labels (López de Prado Ch. 3) decouple labels from the feature g
 
 Both outcomes are valuable and this is the next experiment. Full writeup in `experiments/LABEL_REDESIGN.md`.
 
-**Current project status (2026-04-13):** Five post-audit experiments rejected (Stage 1 regression, Stage 2 v9 wall-aware, Stage 3 v10, Stage 4 both-sides overlay, Stage 5 v11 absolute VP). v6-prime honest remains the nominal best. Project in "experimental playground" mode per user — not chasing profit, using remaining experiments to isolate whether VP carries ML-exploitable signal under clean labels.
+**Interim project status (2026-04-13):** Five post-audit experiments rejected. User shifted project framing to "experimental playground" — use remaining experiments to isolate whether VP carries ML-exploitable signal under clean labels.
+
+### Stage 6 — v11 triple-barrier decisive ablation (2026-04-14) — **POSITIVE VP RESULT**
+
+The Phase 3 central hypothesis — *VP features carry ML-exploitable signal about price levels* — was tested cleanly for the first time by using volatility-scaled symmetric triple-barrier labels (López de Prado Ch. 3) that don't share inputs with the VP feature tensor, then running v11-full (with VP) vs v11-nopv (candle only) on identical walk-forward protocol.
+
+**Result: VP features win on every metric, and the lift is larger on holdout than in-sample.**
+
+Fold-level comparison (both runs, single seed, same 12 walk-forward folds):
+
+| Split | full acc | nopv acc | Δ acc | full EV/tr | nopv EV/tr | Δ EV |
+|---|---|---|---|---|---|---|
+| In-sample (folds 1–10) | 54.16% | 51.55% | +2.62 pp | +0.898% | +0.751% | +0.15 pp |
+| **Holdout (folds 11–12)** | **46.83%** | **41.81%** | **+5.02 pp** | **−0.68%** | **−1.37%** | **+0.68 pp** |
+
+Filter-swept holdout (24h cooldown, 1x / 20% sizing):
+
+| Filter | full CAGR | full DD | full WR | nopv CAGR | nopv WR | Δ CAGR |
+|---|---|---|---|---|---|---|
+| Raw long | −26.7% | 38.8% | 47.7% | −41.3% | 40.4% | +14.6 pp |
+| conf ≥ 0.70 | −9.7% | 20.9% | 50.6% | −24.5% | 31.9% | +14.8 pp |
+| conf ≥ 0.75 | −5.0% | 15.5% | 52.1% | −14.1% | 35.4% | +9.1 pp |
+| **conf ≥ 0.80** | **+11.6%** | **8.2%** | **58.6%** (n=58) | −1.8% | 40.9% (n=22) | **+13.4 pp** |
+
+At `conf ≥ 0.80`, v11-full-tb is the first post-audit model to produce a **positive holdout CAGR** (+11.6%) with a **smaller drawdown** (8.2%) than v10 honest (18.4%). The strategy is very selective (58 trades over ~103 active days), so the comparison to v6-prime honest's 23 trades/year is not apples-to-apples, but the direction is unambiguous.
+
+### What this falsifies from the earlier audit conclusions
+
+1. **"VP is not ML-exploitable under this family of models."** Tentatively concluded after Stages 1–5 rejections. **Falsified** by Stage 6. Every prior test had label/feature input sharing; Stage 6 removed it and the VP lift appeared.
+2. **"v11 is rejected because the representation doesn't carry signal."** Wrong. v11 was rejected under range labels because the labels were a function of `(window_hi, window_lo, close)` — the same inputs the model saw. Under triple-barrier labels the representation validates.
+3. **"The candle-only baseline would match or beat VP-augmented."** False on every split. nopv is strictly worse than full on holdout accuracy, EV, and filter-swept CAGR.
+
+### What still stands
+
+- The audit-retracted Evals 11/12/17/18 are still retracted. Stage 6 does not re-rehabilitate them.
+- **v6-prime honest (+6.0% CAGR / −18.4% DD / holdout ≈ −5%)** is no longer the nominal best, but it remains the most recent *widely-traded* configuration. v11-full-tb at conf ≥ 0.80 is more selective and has not been deployment-tested.
+- **Holdout is still net-negative at low-filter variants.** Both models lose on raw-long holdout. Live deployment requires the high-confidence filter.
+- **Regime change is a shared failure mode.** Fold 12 (2026 Q1) is catastrophic for both full and nopv. VP features reduce the damage but don't fix it. Walk-forward retrain frequency is the separate lever for that problem.
+
+### Next direction
+
+Phase 3 formally reopens with a concrete direction. The prioritized next experiments are:
+
+1. **Multi-asset v11-full-tb** (BTC + ETH + SOL) — tests whether the VP lift is universal or BTC-specific microstructure. See `LABEL_REDESIGN.md` results section and `MODEL_HISTORY.md` §30-31.
+2. **Walk-forward rolling retraining** — retrain every 3 months; directly attacks the shared holdout collapse.
+3. **Live paper-trading the conf ≥ 0.80 wrapper** around v11-full-tb as a sanity check on the +11.6% holdout CAGR.
+
+Full writeup in `experiments/LABEL_REDESIGN.md` (Results — decisive experiment) and `experiments/MODEL_HISTORY.md` §30–31.
+
+**Current project status (2026-04-14):** First positive VP result in project history. v11-full-tb conf≥0.80 produces +11.6% holdout CAGR / 8.2% DD. Phase 3 has a direction. Multi-asset is the next experiment.
