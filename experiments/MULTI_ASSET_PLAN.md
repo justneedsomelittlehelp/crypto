@@ -1,16 +1,198 @@
-# Multi-Asset Plan — Testing the Universality of the VP Signal
+# Multi-Asset Plan — Reframed to Regime-Conditioning Features
 
 > **Status**: planning doc — no code written yet, no runs executed.
 > **Context**: the v11 triple-barrier decisive ablation (2026-04-14) gave
-> the first clean positive VP result in project history on BTC. Before
-> building live-deployment infrastructure around it, we want to know
-> whether the lift generalizes beyond BTC — is the VP signal *universal
-> market microstructure* or *BTC-specific memorization*? This doc is
-> the plan for answering that.
+> the first clean positive VP result in project history on BTC. The
+> original plan in this doc framed the follow-up as "test VP universality
+> on BTC + ETH (+ SOL)," quant-firm-shaped thinking that assumed we'd
+> trade multiple assets simultaneously for statistical power. **User
+> correction 2026-04-14 (same day, later in session): that framing is
+> wrong for this project's shape.** See the `REFRAME` section immediately
+> below — the revised plan replaces multi-asset training with macro
+> regime conditioning features on a single-asset (BTC) model.
 >
 > **Related docs**: `LABEL_REDESIGN.md` §Results (the positive v11-tb
 > finding), `MODEL_HISTORY.md` §§30–31, `EVAL_AUDIT.md` §9 Stage 6,
 > `STRATEGY.md` (user's manual trading philosophy).
+
+---
+
+## ⭐ REFRAME (2026-04-14) — Regime features, not multi-asset training
+
+The original plan below was structured around *"train on BTC + ETH (+ SOL)
+jointly so the model sees more microstructures and produces more holdout
+trades for statistical power."* That's the correct framing for a prop
+firm running simultaneous positions across many instruments. It's the
+**wrong** framing for this project because:
+
+1. **The user is an individual swing trader with capital constraints.**
+   They cannot realistically hold simultaneous positions across multiple
+   instruments the way a portfolio strategy would. The model's job is
+   not to pick the best-signal asset from a basket and trade it — that's
+   a fundamentally harder ML problem (cross-asset ranking, capital
+   allocation, volatility normalization across asset classes) that
+   requires much more capacity and infrastructure than what we've built.
+2. **The strategy is hours-to-weeks swing trading with filtered entries,
+   not minutes-scale portfolio execution.** The filter layer already
+   decides "is this a good BTC entry right now?" — the model's role is
+   to condition that answer on the best available information about
+   current market state, not to propose alternative trade destinations.
+3. **In that framing, other assets become** *extra market state
+   information* — **context features that tell the BTC model "we're in
+   a risk-off regime" or "the dollar is ripping" — not additional
+   training instruments.** This is how discretionary macro traders
+   actually use gold, oil, DXY, VIX, yields — they don't trade those
+   instruments; they use them to condition their primary trade thesis.
+
+### The revised Stage 1
+
+Replace the BTC + ETH training experiment with a **single-asset BTC model
+augmented with macro regime features**. The model still predicts BTC
+triple-barrier outcomes. It still runs on `BTC_15m_ABSVP_30d.csv`. The
+change is that each day token (and/or the final-FC input) gains a small
+set of scalar features describing the broader market state at that
+moment:
+
+| Category | Features | Source | n |
+|---|---|---|---|
+| **Commodities** | GLD 5d & 30d log return | yfinance | 2 |
+| | USO 5d & 30d log return | yfinance | 2 |
+| **FX** | DXY 5d & 30d log return | yfinance | 2 |
+| **Vol** | VIX level, VIX 7d change | yfinance / FRED | 2 |
+| **Rates** | Fed funds level, 90d change | FRED | 2 |
+| **Term structure** | 10Y − 2Y yield curve slope | FRED | 1 |
+| **Total** | — | — | **11** |
+
+All eleven are continuous scalars (confirmed 2026-04-14 — the user's
+initial categorical framing for FFR was discussed and continuous
+explicitly chosen because it preserves information at bucket
+boundaries and doesn't require an embedding layer for a field that's
+constant 99% of bars anyway).
+
+### Why this is better than the original plan
+
+1. **Deployment-aligned.** When the model goes live, checking daily
+   GLD/USO/DXY/VIX/FFR/yield closes is exactly what a macro-aware
+   discretionary trader already does. The model learns the same mental
+   model the human would apply.
+2. **Directly attacks the fold 12 problem.** The holdout collapse in
+   2026 Q1 is almost certainly regime-driven — some specific macro
+   configuration that the model has never seen. Regime features give
+   the model a way to detect "this is a different regime, proceed
+   with caution" that it currently lacks.
+3. **Much lower implementation cost than multi-asset.** No per-asset
+   CSVs, no asset embedding, no pooled training plumbing, no
+   stratified walk-forward. Just two new scrapers (yfinance + FRED),
+   one merge column layer, and a slightly wider day token.
+4. **Single variable at a time.** Adding regime features is one
+   isolated change on top of the validated v11-full-tb baseline.
+   Multi-asset + architecture + asset embedding was stacking three
+   changes into one experiment.
+5. **Preserves all the sample-count benefit we wanted from multi-asset
+   *differently*.** The original plan's sample-count argument was
+   "more trades let us distinguish edge from noise." Regime features
+   don't add trade count, but they do add **signal quality per trade**,
+   which moves the same needle (detectable edge per unit data)
+   without the infrastructure cost. Combined with walk-forward
+   retraining in a later experiment, we can get both.
+6. **The "does VP generalize" question can still be answered later** —
+   but as a separate experiment with a different purpose (pure science,
+   not deployment prep). If we build a case for publication later, we
+   revisit multi-asset then.
+
+### Revised implementation sketch
+
+1. **Scrape daily macro series.**
+   - `yfinance`: `GLD`, `USO`, `^VIX`, `^DXY` (or `DX-Y.NYB`)
+   - `pandas_datareader` / `fredapi` (FRED): `FEDFUNDS`, `DGS2`,
+     `DGS10`, `VIXCLS` (backup for VIX if yfinance is noisy)
+   - Daily resolution, start 2016-01-01 to current, forward-fill
+     weekends and holidays.
+2. **Compute derived features.**
+   - For each of GLD, USO, DXY: 5-day and 30-day log returns.
+   - VIX: level + 7-day change.
+   - Fed funds: current level + 90-day change.
+   - Yield curve: `DGS10 − DGS2`.
+   - All 11 features are float32 scalars, one row per calendar day.
+3. **Merge to the BTC 15m CSV.**
+   - New columns on `BTC_15m_ABSVP_30d.csv` (or a parallel
+     `BTC_15m_ABSVP_30d_regime.csv` to avoid touching the existing
+     file).
+   - Forward-fill from daily to 15m: every 15m bar carries the most
+     recent realized daily macro values. Always look backward — never
+     let the 15m bar see a macro value that wasn't published yet.
+4. **Add `--regime {none, all}` flag to `eval_v11.py`.**
+   - `none`: current behavior, no regime features (baseline for the
+     ablation).
+   - `all`: day token width grows from 110 → 121. `day_projection`
+     becomes `Linear(53, 32)` instead of `Linear(42, 32)`. ~360 new
+     params. Model class unchanged beyond the layer dimension.
+5. **Run the decisive comparison.**
+   - `v11-full-tb + regime=none` (replicate of the existing result)
+   - `v11-full-tb + regime=all` (the new experiment)
+   - Same triple-barrier labels, same walk-forward, same holdout,
+     same backtest engine (run_backtest_v11_tb.py).
+6. **Report**: does regime lift v11-full-tb holdout numbers? Fold
+   12 specifically? Real-engine CAGR at conf≥0.70 / 0.75 / 0.80?
+
+### Where the features attach in the day token
+
+Three options, from simplest to most expressive:
+
+1. **Append to `last_bar`** (currently 4-dim) → becomes 15-dim.
+   Model sees regime only at the final FC head. Minimal change.
+   Loses temporal structure (regime evolution over 90 days is
+   invisible).
+2. **Append to each `day_token`** (currently 110-dim) → becomes
+   121-dim. Temporal transformer sees regime history day-by-day.
+   Lets model learn "regime started shifting 7 days ago" reasoning.
+   **Recommended first try.**
+3. **Separate "regime branch"** with its own small transformer over
+   the 90-day regime sequence, then concatenate with v11's output.
+   Maximum capacity, maximum overfitting risk. Not for the first run.
+
+**Decision locked**: Option 2 (append to each day token). Cleanest
+middle ground, preserves temporal information, minimal parameter
+growth.
+
+### Updated success criteria
+
+Stage 1 (regime features) is **positive** if:
+
+1. `v11-full-tb + regime=all` beats `v11-full-tb + regime=none` on
+   holdout accuracy or holdout real-engine CAGR by a meaningful
+   margin (≥ 3 pp acc or ≥ 2 pp CAGR at the conf≥0.70 filter).
+2. Fold 12 (2026 Q1) specifically improves — that's the regime-
+   change failure mode the feature set is designed to address.
+3. Ideally: the sign-flip baseline gap narrows (less anti-alignment
+   on holdout), which would indicate the model is no longer
+   memorizing pre-2025 direction.
+
+**Negative** (regime features don't help):
+
+1. `regime=all` ties or loses to `regime=none` on holdout.
+2. Possible interpretations: daily macro data is too slow for 14-day
+   swing trades, the existing v11 features already encode what's
+   useful, or fold 12's specific regime isn't detectable from any
+   of the 11 features chosen.
+3. Still a legitimate finding — would falsify "macro regime features
+   help short-horizon crypto prediction" which is a meaningful
+   negative result.
+
+**Null** (no difference either way): regime features are free to
+include but don't move the needle. We'd probably keep them on a
+priori grounds (they're cheap and deployment-relevant) but not rely
+on them.
+
+---
+
+## Original (superseded) multi-asset plan
+
+*Everything below is the pre-reframe content, preserved because the
+rejected-candidates section (SPY cash, individual stocks, spot forex)
+still stands as a record of assets we considered and why we skipped
+them. The BTC + ETH Stage 1 is no longer the plan — the reframe above
+supersedes it.*
 
 ---
 
