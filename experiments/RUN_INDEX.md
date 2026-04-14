@@ -138,3 +138,24 @@ run_1775624483, run_1775624490, run_1775624499, run_1775624511, run_1775624521, 
 
 ### Eval 18 — Sensitivity validation of 24h post-SL pause
 *(run_backtest.py — Two sweeps: coarse 14-60h then fine 21-30h at 1h intervals. Confirmed 23-24h is a 2-hour peak (tied at +34% CAGR), part of a 5-hour plateau (22-26h all beat baseline). Not a single-point spike. DD robustly -15.1% across entire 21-30h range. Mechanism is structural, not random. **24h confirmed as deployable.** Results: experiments/backtest_results.json)*
+
+---
+
+## Post-audit experiments (2026-04-12 → 2026-04-13)
+
+⚠ Evals 11/12/17/18 above **retracted** per `EVAL_AUDIT.md` §§1–8.
+
+### Post-audit Stage 1 — v9-regression (REJECTED)
+*(eval_v9_regression.py — regression labels on v6-prime architecture. Rejected for loss-function reasons. See `MODEL_HISTORY.md` §23.)*
+
+### Post-audit Stage 2 — v9 wall-aware (NULL RESULT)
+*(eval_v9.py — VP-structure context token in spatial attention. Folds 3 and 8 dramatically better than v6-prime, but gains don't propagate to holdout. See `MODEL_HISTORY.md` §24, `EVAL_AUDIT.md` §8.)*
+
+### Post-audit Stage 3 — v10 (90d temporal × 30d VP) (REJECTED)
+*(eval_v10.py — lookback reallocation, 180d VP → 30d VP + 30d temporal → 90d temporal. Same v6-prime architecture and labels. Holdout ≈ v6-prime baseline, no uplift. Results: experiments/eval_v10_results.json, experiments/v10_predictions.npz. See `MODEL_HISTORY.md` §26.)*
+
+### Post-audit Stage 4 — v10 both-sides mirror-short overlay (REJECTED)
+*(backtest_v10_both_sides.py — bear-regime short overlay on v10 predictions. Bear-short "edge" was a first-hit mechanics artifact — unconditional short baseline captured it fully, logit filters only hurt. Regime-aware both-sides direction formally closed. Results: experiments/backtest_v10_both_sides.json. See `MODEL_HISTORY.md` §27.)*
+
+### Post-audit Stage 5 — v11 absolute-range VP @ 15m (REJECTED, root cause found) **⭐ MOST PRODUCTIVE REJECTION**
+*(eval_v11.py — absolute visible-range VP + self-channel + price_pos/range_pct scalars, 15m resolution, 2-channel spatial attention. 25,601 params. Single-seed walk-forward: overall 64.3% acc, holdout raw long −14.1% CAGR. **Filter analysis revealed the Phase 3 binding constraint**: the range-derived TP/SL label is near-deterministic from `asym = TP/SL`, which is itself deterministic from `(window_hi, window_lo, close)` — columns the model sees. Free classifier on `asym` scores ~80% without ML. All prior Phase 3 experiments had this coupling at lower intensity, making the VP hypothesis unfalsifiable for the whole project. Triggered `experiments/LABEL_REDESIGN.md`. Results: experiments/eval_v11_results.json, experiments/v11_predictions.npz. See `MODEL_HISTORY.md` §28, `EVAL_AUDIT.md` §9.)*

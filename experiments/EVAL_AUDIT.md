@@ -306,3 +306,64 @@ Stage 2 artifacts preserved in the repo for forensic reference:
 ---
 
 **Current project status (end of Stage 2):** Audit-complete, Stage 1 and Stage 2 experiments both rejected, v6-prime honest configuration remains the best available strategy, and it does not beat passive SPY. Project remains paused at end of Phase 3. Stage 3 is the final available experiment but is not currently planned — user's call whether to run it.
+
+---
+
+## 9. Post-audit Stages 3–5 (2026-04-12 → 2026-04-13) — v10, both-sides overlay, v11
+
+After Stage 2 the user greenlit three additional experiments rather than pausing. All three were rejected on holdout. Bullet summary below; detailed results live in `MODEL_HISTORY.md` §§26–28 and `EVAL_TRANSFORMER.md` at the end.
+
+### Stage 3 — v10: 90-day temporal × 30-day VP (2026-04-12, REJECTED)
+
+Reallocated the lookback budget: shrank the VP window from 180d → 30d and grew the temporal window from 30d → 90d, keeping the total information roughly constant. Same architecture as v6-prime, same labels. Holdout result: slightly worse than v6-prime honest baseline (roughly −5% holdout preserved, no improvement). Rejected. Artifacts: `src/models/architectures/v10_long_temporal.py`, `src/models/eval_v10.py`, `experiments/eval_v10_results.json`.
+
+### Stage 4 — Regime-aware both-sides mirror-short overlay (2026-04-13, REJECTED)
+
+The last "unexplored credible direction" from the Stage 2 writeup. Applied a short-side overlay to v10 predictions gated by SMA regime: long v10 signal in bull, mirror-short v10 signal in bear. Bear-regime EV appeared strong in early analysis but the effect was a **first-hit mechanics artifact** — under asymmetric TP/SL geometry in a sustained bear trend, *any* short (even an unconditional one) looked profitable, because SL rarely got hit before the vertical barrier. The logit-filtered variants all underperformed the unconditional short baseline, proving the edge came from TP/SL geometry not model signal. Formally closed as a dead end. Artifacts: `src/models/backtest_v10_both_sides.py`, `experiments/backtest_v10_both_sides.json`.
+
+### Stage 5 — v11: absolute-range VP @ 15m (2026-04-13, REJECTED with root cause identified)
+
+The largest reframing since v6. Three changes stacked at once:
+1. **Representation**: relative log-distance VP → visible-range absolute VP (50 bins spanning the actual 30-day high/low) + hard one-hot self-channel + continuous `price_pos`/`range_pct` scalars. Mirrors how the user reads Kraken's VRVP.
+2. **Resolution**: 1h → 15m. ~4× training data (357k rows vs 87k). Sample/param ratio improves from ~2:1 to ~14:1.
+3. **Architecture**: new `AbsVPv11` (2-channel spatial attention, otherwise same shape as v10). 25.6k params.
+
+**Results (single-seed walk-forward, 12 folds, embargo 14 days wall-clock):**
+
+| Filter stack | Holdout CAGR | Holdout win rate |
+|---|---|---|
+| Raw long, no filter | **−14.1%** | 51.0% |
+| Flipped (pred == 0 as long) | −16.1% | 31.4% |
+| `conf ≥ 0.70 + asym ≥ 1 + 24h pause` (v10 recipe) | **−13.3%** | 35.8% |
+| `asym < 1.0` (inverted) | −12.6% | 63.4% |
+| `asym ∈ [0.3, 0.8]` (inverted band) | −9.7% | 59.6% |
+| `conf ≥ 0.70 + asym < 1.0` (inverted combo) | −15.5% | 62.0% |
+
+Every filter stack lands in [−15%, −10%] on holdout. Flip baseline is not meaningfully different from raw, so the model is weakly correlated with truth — not anti-aligned.
+
+### Root cause — the label formula, not the representation
+
+Post-hoc filter analysis exposed a **structural label leak**. The range-derived TP/SL label is a near-deterministic function of `asym = TP_pct / SL_pct`, and `asym` is itself a deterministic function of `(window_hi, window_lo, close)` — columns the model sees in its features. Pos-rate distribution on the 170k test set:
+
+| `asym` band | n | pos_rate |
+|---|---|---|
+| `[0.0, 0.5)` | 65,359 | **88.5%** |
+| `[0.5, 0.8)` | 14,231 | 70.2% |
+| `[0.8, 1.2)` | 14,809 | 51.7% |
+| `[1.2, 2.0)` | 22,211 | 38.3% |
+| `[2.0, ∞)` | 54,386 | **18.6%** |
+
+A constant classifier predicting "label = 1 iff `asym < 0.8`" scores ~80% accuracy on the full set before any ML is applied. v11's actual overall accuracy was 64.3% — **below the free classifier**, meaning the representation didn't even help it fully exploit the label geometry. The v11 "filter inversion" finding (asym<1 gives pretty in-sample numbers, asym≥1 looks terrible) is entirely a label-base-rate artifact, not a model property.
+
+This retroactively explains most of Phase 3's weird filter behavior. The same coupling existed in v6-prime/v10 (VP-peak-derived TP/SL share inputs with VP features), just to a lesser degree because the peak-derived ratios were more varied.
+
+### What this unlocked — the decisive VP ablation
+
+Triple-barrier labels (López de Prado Ch. 3) decouple labels from the feature geometry by scaling barriers off rolling volatility rather than range distance. Under triple-barrier labels, running **v11-full (with VP) vs v11-nopv (candle features only)** on the same holdout is the decisive test Phase 3 was designed to run but could never execute: every prior label formula shared inputs with VP features.
+
+- If v11-full > v11-nopv → VP carries real signal; v10/v11 failures were labels, not features. Phase 3 reopens.
+- If v11-full ≈ v11-nopv → the "VP as ML support/resistance" hypothesis is falsified at the model level; Phase 3 closes for real.
+
+Both outcomes are valuable and this is the next experiment. Full writeup in `experiments/LABEL_REDESIGN.md`.
+
+**Current project status (2026-04-13):** Five post-audit experiments rejected (Stage 1 regression, Stage 2 v9 wall-aware, Stage 3 v10, Stage 4 both-sides overlay, Stage 5 v11 absolute VP). v6-prime honest remains the nominal best. Project in "experimental playground" mode per user — not chasing profit, using remaining experiments to isolate whether VP carries ML-exploitable signal under clean labels.

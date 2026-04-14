@@ -907,8 +907,118 @@ Stage 2 artifacts preserved: `src/models/architectures/v9_wall_aware.py`, `src/m
 - **Audited v6-prime honest config remains the best available strategy.** +6.0% CAGR / −18.4% DD / holdout ≈ −5% / 65% win rate. Does not beat passive SPY.
 - **Two of three post-audit experiments run. Both rejected.** Stage 1 failed for loss-function reasons (regression on bimodal labels). Stage 2 failed on holdout generalization (architecture alone insufficient).
 - **Stage 3 (volume-weighted effective-distance labels) is technically available** as the third and final leg. Given the fold-3 and fold-8 wins in Stage 2, the "architecture can use wall structure when conditions are right" hypothesis is partially supported, and better labels might generalize those wins. Honest prior: 20–30% chance Stage 3 clears the holdout bar.
-- **No Stage 3 is currently planned.** Decision paused pending user's call.
 
 ---
 
-*Last updated: 2026-04-12 after Stage 2.*
+## 26. Post-audit Stage 3 — v10 (90d temporal × 30d VP) — REJECTED (2026-04-12)
+
+**Hypothesis.** Reallocate the lookback budget: shrink the VP rolling window from 180 days → 30 days (matches how the user actually reads charts — recent-volume zoom) and grow the temporal transformer window from 30 days → 90 days (preserves the longer price-action context). Same architecture, same labels, same walk-forward. Net history per forward pass drops 210d → 120d and we gain ~2,100 usable training rows from the shorter warmup.
+
+**Setup.** New pipeline `src/data/compute_vp_30d.py` writes `BTC_1h_RELVP_30d.csv` alongside the legacy 180d file. New architecture `src/models/architectures/v10_long_temporal.py` subclasses v6-prime with `n_days=90` and nothing else. New eval wrapper `src/models/eval_v10.py` patches `LOOKBACK_BARS_MODEL` from 720 → 2160 before importing the feature pipeline so `_compute_vp_structure` uses the 90-day window for peak aggregation. Output artifacts: `experiments/eval_v10_results.json`, `experiments/v10_predictions.npz`.
+
+**Results.** Holdout CAGR essentially unchanged vs v6-prime honest (roughly −5% both). A few in-sample folds improved marginally, but fold 11 (holdout) remained negative and the full-period CAGR did not clear v6-prime's +6%. No regime or filter variant produced a meaningful uplift.
+
+**Verdict.** Rejected on the holdout criterion. Reallocating lookback between spatial and temporal dimensions does not unlock the signal — whatever the model is doing on in-sample folds does not generalize past 2025-07. Artifacts preserved.
+
+---
+
+## 27. Post-audit Stage 4 — regime-aware both-sides mirror-short overlay — REJECTED (2026-04-13)
+
+**Hypothesis.** The §20 audit writeup flagged "regime-aware both-sides" as the most credible unexplored direction: bull-regime EV breakdown showed bull_long +1.64%, bear_short +0.70%, with the other two regime/direction combinations negative. A mirror-short overlay should pick up the bear-short EV v6-prime was leaving on the table.
+
+**Setup.** `src/models/backtest_v10_both_sides.py` takes v10 predictions + SMA-regime array and applies a short-side overlay: in bull regimes, use the v10 long signal as-is; in bear regimes, flip the signal to a short and enter at the opposite side. TP/SL ratios mirrored (SL above, TP below). Same 14-day vertical barrier. Ran multiple logit-filter variants and an unconditional-short baseline for comparison.
+
+**Results (holdout, bear-regime subset).**
+
+| Variant | Trades | EV/trade | Notes |
+|---|---|---|---|
+| Unconditional short (no model) | baseline | **+5.87%** | the ceiling |
+| `logit < 0.30` short | fewer | +4.1% | worse than no filter |
+| `logit < 0.50` short | more | +3.4% | worse than no filter |
+| v10-signal-inverted short | even fewer | +2.8% | worst |
+
+**Diagnosis.** The apparent bear-short edge is a **first-hit mechanics artifact**, not model skill. Under asymmetric TP/SL geometry in a sustained bear trend, *any* short trade barely ever hits SL before the 14-day vertical barrier, so the label is dominated by "price closes lower 14 days later, label = 1." An unconditional short captures this mechanical bias in full. Every logit-filtered variant takes fewer trades and misses some of the easy wins, underperforming the baseline. The v10 model has no actual bear-regime discrimination — it just happened to sit adjacent to a geometry that rewards any short-side exposure.
+
+**Verdict.** Closed as a dead end. The "regime-aware both-sides" direction from the audit is formally **not** an unexplored edge — it's a TP/SL geometry artifact and was already fully captured by the unconditional short baseline. Artifacts: `src/models/backtest_v10_both_sides.py`, `experiments/backtest_v10_both_sides.json`.
+
+---
+
+## 28. Post-audit Stage 5 — v11 absolute-range VP @ 15m — REJECTED, root cause found (2026-04-13)
+
+**Hypothesis.** Three changes stacked for what was billed as the "final iteration":
+
+1. **Representation**: relative log-distance VP → absolute visible-range VP (50 bins spanning the actual trailing 30-day high/low, using wicks not closes) + hard one-hot self-channel marking the bin containing `close_t` + continuous `price_pos` and `range_pct` scalars. Mirrors how the user reads Kraken's VRVP.
+2. **Resolution**: 1h → 15m. Training rows jump from ~87k → ~357k. Sample/param ratio improves from 2:1 → 14:1.
+3. **Architecture**: new `AbsVPv11` class — 2-channel spatial attention (`Linear(2, 32)` bin embedding instead of `Linear(1, 32)`), otherwise identical to v10's 2+1 shape. 25,601 params.
+
+**Setup.** New pipeline `src/data/compute_absvp_15m_30d.py` writes `BTC_15m_ABSVP_30d.csv` (357,705 rows, 2016-01-31 → 2026-04-14). New architecture `src/models/architectures/v11_abs_vp.py`. New eval script `src/models/eval_v11.py` with on-GPU index-gather batching (no DataLoader, no CPU↔GPU per-batch copies) and 14-day wall-clock embargo (resolution-independent). Labels: long-only first-hit with range-derived per-sample TP/SL. `TP = (window_hi − close)/close × 0.8`, `SL = (close − window_lo)/close × 0.6`, both clipped [1%, 15%], 1344-bar (14d) horizon. Single-seed walk-forward to keep iteration fast.
+
+**Results.** Total walk-forward: 76.8 min on H100. Overall accuracy 64.3%. Fold-by-fold:
+
+| Fold | Period | Acc | EV/trade | Notes |
+|---|---|---|---|---|
+| 1 | 2020 H2 | 84.5% | +1.75% | bull trend — easy |
+| 2 | 2021 H1 | **42.4%** | −4.22% | top of bull → crash |
+| 3 | 2021 H2 | 68.4% | +1.41% | |
+| 4 | 2022 H1 | 61.1% | −9.13% | bear, few trades |
+| 5 | 2022 H2 | 73.4% | +1.45% | |
+| 6 | 2023 H1 | 54.1% | +0.26% | |
+| 7 | 2023 H2 | **93.8%** | +2.58% | bull run — easy |
+| 8 | 2024 H1 | 64.4% | +1.42% | |
+| 9 | 2024 H2 | 72.5% | +1.42% | |
+| 10 | 2025 H1 | **30.9%** | −2.89% | worse-than-random |
+| 11 | 2025 H2 (holdout) | 63.3% | −0.35% | |
+| 12 | 2026 Q1 (holdout) | 58.6% | −0.76% | |
+
+Holdout raw long: **−14.1% CAGR, 51.0% win rate.** Fold 10 at 30.9% is worse than random; fold 2 at 42.4% is the same bull-top failure mode v10 had. High-accuracy folds cluster on uniform trends (2020 H2, 2023 H2, 2024 H2), bear/transition folds collapse.
+
+**Filter analysis** (170k predictions, `src/models/analyze_v11_filters.py`). None of the v10-recipe filters rescue it:
+
+| Filter | Holdout CAGR | Win rate |
+|---|---|---|
+| Raw long (no filter) | −14.1% | 51.0% |
+| Pred == 0 (sign flip) | −16.1% | 31.4% |
+| `conf ≥ 0.70 + asym ≥ 1 + pause` | **−13.3%** | 35.8% |
+| `asym < 1` (inverted) | −12.6% | 63.4% |
+| `conf ≥ 0.70 + asym < 1` | −15.5% | 62.0% |
+
+**Key finding: confidence is uncalibrated.** Sweeping the threshold 0.50 → 0.80 does not shift any metric. Normally higher confidence raises win rate; here it does not. The model has no discrimination above what the label geometry provides for free.
+
+### Root cause — label formula leaks feature geometry into labels
+
+Running the asymmetry/label coupling table on the 170k test set exposed a structural bias:
+
+| `asym` band | n | pos_rate |
+|---|---|---|
+| `[0.0, 0.5)` | 65,359 | **88.5%** |
+| `[0.5, 0.8)` | 14,231 | 70.2% |
+| `[0.8, 1.2)` | 14,809 | 51.7% |
+| `[1.2, 2.0)` | 22,211 | 38.3% |
+| `[2.0, ∞)` | 54,386 | **18.6%** |
+
+The label is a monotonic deterministic function of `asym`, and `asym` is itself a deterministic function of `(window_hi, window_lo, close)` — columns the model sees as features. A free classifier predicting "label = 1 iff asym < 0.8" scores ~80% accuracy before any ML. v11's 64.3% overall accuracy is **below the free classifier**, confirming the representation did not help it exploit the geometry. The v10 `asym ≥ 1` filter "worked" on v10 precisely because its peak-derived labels had the same coupling at lower intensity — everything in Phase 3 that looked like edge was partly just label bias.
+
+**Verdict.** Rejected. But this is the most productive rejection in the project's history because it identified the binding constraint. The representation change did not break v11; **v11 exposed a pre-existing problem** that made the earlier experiments unfalsifiable.
+
+### Unlocks the decisive experiment
+
+Triple-barrier labels with volatility-scaled barriers (López de Prado Ch. 3) decouple labels from `(window_hi, window_lo, close)` — the barriers become functions of trailing return volatility, not range distance. Under clean labels, running **v11-full (with VP features) vs v11-nopv (candle features only, VP zeroed)** on the same holdout is the decisive test: does the model get any lift from VP when the labels aren't pre-biased by range geometry?
+
+- v11-full > v11-nopv → VP carries real ML-exploitable signal, v10/v11 failures were label formulas, Phase 3 reopens with direction.
+- v11-full ≈ v11-nopv → VP is not ML-exploitable (the user's manual strategy may still work, but the ML angle is falsified), Phase 3 formally closes.
+
+Full design in `experiments/LABEL_REDESIGN.md`. Artifacts preserved: `src/data/compute_absvp_15m_30d.py`, `src/models/architectures/v11_abs_vp.py`, `src/models/eval_v11.py`, `src/models/analyze_v11_filters.py`, `experiments/eval_v11_results.json`, `experiments/v11_predictions.npz`.
+
+---
+
+## 29. Current status (end of Stage 5)
+
+- **Audited v6-prime honest config still nominally best.** +6.0% CAGR / −18.4% DD / holdout ≈ −5% / 65% win rate. Still does not beat SPY. All post-audit experiments have failed to beat it.
+- **Five post-audit experiments rejected**: Stage 1 regression (loss function), Stage 2 v9 (holdout generalization), Stage 3 v10 (same), Stage 4 both-sides overlay (TP/SL geometry artifact, not model signal), Stage 5 v11 absolute-VP (label formula leak — the binding constraint for Phase 3 as a whole).
+- **Root cause of Phase 3 struggles identified**: every label formula tried shared inputs with the feature tensor, making the "does VP carry signal" hypothesis unfalsifiable. v11's asym/label coupling table was the final confirmation.
+- **Next experiment is the first falsifiable VP test in the project's history**: triple-barrier labels + v11-full vs v11-nopv ablation. This is a clean binary outcome with project-defining consequences either way.
+- **User has shifted project framing** from "build something profitable" to "experimental playground — use remaining experiments to answer whether VP carries ML-exploitable signal." Phase 3 formally reopens under this framing.
+
+---
+
+*Last updated: 2026-04-13 after Stage 5 (v11). Next: triple-barrier labels + VP ablation per `LABEL_REDESIGN.md`.*

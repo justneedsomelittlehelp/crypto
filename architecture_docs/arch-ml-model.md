@@ -116,7 +116,8 @@ See `experiments/MODEL_HISTORY.md` for full reasoning behind each transition.
 | `v7_simple_2plus1.py` | 2+1 simple, mean pool | Eval 5 |
 | `v8_enriched_2plus1.py` | 2+1 enriched, CLS pool | Eval 6, 8 |
 | **`v6_prime_vp_labels.py`** | **⭐⭐ Same as v6 (frozen for VP-derived label experiments)** | **Current best (Eval 11-12)** |
-| `v10_long_temporal.py` | Subclass of v6-prime with `n_days=90` (90-day temporal window) | `eval_v10` — post-audit experiment |
+| `v10_long_temporal.py` | Subclass of v6-prime with `n_days=90` (90-day temporal window) | `eval_v10` — post-audit experiment (REJECTED) |
+| `v11_abs_vp.py` | 2-channel spatial attention over 50 abs-VP bins + 50 self-channel, 15m data | `eval_v11` — post-audit experiment (REJECTED, root cause found) |
 
 Frozen rules: never modify. New experiments create new versioned files.
 
@@ -142,6 +143,83 @@ Files:
 - Model: `src/models/architectures/v10_long_temporal.py`
 - Eval: `src/models/eval_v10.py` (thin wrapper patching `eval_v6_prime`)
 - Data: `src/data/compute_vp_30d.py` (one-time CSV generator)
+
+### v11 design note (2026-04-13) — REJECTED, identified Phase 3 binding constraint
+
+v11 was built as the "final iteration" for Phase 3: absolute-range
+(visible-range) VP at 15m resolution, with a new 2-channel spatial
+attention that ingests both the VP bins and a hard one-hot self-channel
+marking the current-price bin.
+
+**Feature reshape.** New pipeline `src/data/compute_absvp_15m_30d.py`
+writes `BTC_15m_ABSVP_30d.csv` (357,705 rows). Each bar carries:
+
+- `vp_abs_00..49` — 50 linear bins spanning the trailing 30-day
+  `[low, high]` wick range (not closes). Sums to 1 after volume-weighted
+  histogram + normalization.
+- `self_00..49` — hard one-hot on the bin containing `close_t`. Gives
+  the spatial transformer a positional anchor that was implicit in
+  relative VP (always bin 25 = close).
+- `price_pos` — `(close − lo) / (hi − lo)` ∈ [0, 1]. Continuous, precise.
+- `range_pct` — `(hi − lo) / close`. Regime-width signal.
+- `window_lo`, `window_hi` — debug columns for chart comparison.
+
+**Model.** `src/models/architectures/v11_abs_vp.py` takes pre-aggregated
+day-token tensors `(B, 90, 110)` instead of raw hourly bars. The day
+token is `50 vp_abs + 50 self + 8 candle + 2 scalars = 110`. Only real
+structural change vs v10: `bin_embed: Linear(1, 32) → Linear(2, 32)` so
+each bin is a (vp, self) 2-D token. 25,601 params at the default 1
+spatial + 1 temporal layer. Parameterized via `--spatial`/`--temporal`
+CLI flags so variants (1+2, 2+1, 2+2) can be swept without re-editing.
+
+**Labels (range-derived, REJECTED).** First-hit long-only with
+`TP = (hi − close)/close × 0.8`, `SL = (close − lo)/close × 0.6`, both
+clipped [1%, 15%], 14-day horizon. **This label formula is the binding
+constraint for all of Phase 3**, not just v11 — see below.
+
+**Training pipeline.** `src/models/eval_v11.py` is self-contained for
+Colab. Key anti-bottleneck moves:
+
+- Flat feature tensors uploaded to GPU once (~165 MB). No DataLoader,
+  no num_workers, no collate — per-batch assembly is a single
+  `day_rows_gpu[batch_idx[:, None] + day_offsets[None, :]]` gather on
+  device. Zero CPU↔GPU per-batch copies.
+- Day tokens pre-aggregated once on CPU via pandas rolling ops (so the
+  model never sees 8,640-bar windows). Per-batch memory ~10 MB vs ~1 GB.
+- bfloat16 autocast, torch.compile (with math-SDPA fallback because
+  `head_dim = 32/4 = 8` is below Flash Attention's minimum).
+- Embargo: `pd.Timedelta(days=14)` wall-clock — resolution-independent,
+  unlike v6-prime's `hours=EMBARGO_BARS` which would silently break at
+  15m.
+
+**Rejected 2026-04-13.** Holdout raw long CAGR −14.1%, confidence
+uncalibrated, no filter stack rescues it. But the post-hoc analysis
+identified the **root cause**:
+
+The asymmetry ratio `asym = TP_pct / SL_pct` is a deterministic function
+of `(window_hi, window_lo, close)` — columns the model sees as features.
+On the 170k test set, pos_rate is a near-monotonic function of asym:
+`[0, 0.5)` → 88.5%, `[2, ∞)` → 18.6%. A free classifier using only
+`asym` scores ~80% accuracy. v11's 64.3% is *below* the free classifier.
+
+**Every Phase 3 label formula had this coupling to some degree** — v6-prime's
+VP-peak-derived TP/SL share inputs with VP features, just at lower intensity.
+This means the "does VP carry signal" question has been **unfalsifiable for
+the entire project** because label and feature geometry share inputs.
+
+**Unlocks the decisive experiment.** Under triple-barrier labels
+(volatility-scaled symmetric barriers, López de Prado Ch. 3), labels
+become functions of `(close, σ_t, forward path)` only — no shared inputs
+with features. Running **v11-full (with VP) vs v11-nopv (candle only)**
+on the same holdout is the first falsifiable test of the VP hypothesis
+in the project's history. Full design: `experiments/LABEL_REDESIGN.md`.
+
+Files:
+- Data: `src/data/compute_absvp_15m_30d.py`
+- Model: `src/models/architectures/v11_abs_vp.py`
+- Eval: `src/models/eval_v11.py` (supports `--spatial --temporal --tag --seeds`)
+- Filter analysis: `src/models/analyze_v11_filters.py` (supports `--tag --npz`)
+- Results: `experiments/eval_v11_results.json`, `experiments/v11_predictions.npz`
 
 ## Training principles
 

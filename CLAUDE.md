@@ -41,6 +41,7 @@ Read the relevant doc before modifying code in that domain:
 | **Model evolution history (living doc)** | `experiments/MODEL_HISTORY.md` |
 | **⚠ Audit post-mortem — retracts Eval 11/12/17/18** | `experiments/EVAL_AUDIT.md` |
 | **v10: 90-day temporal × 30-day VP (post-audit experiment)** | `architecture_docs/arch-ml-model.md` §v10 |
+| **Label redesign — triple-barrier options, v11 post-mortem** | `experiments/LABEL_REDESIGN.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
 ## Key Data
@@ -75,7 +76,7 @@ Read the relevant doc before modifying code in that domain:
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **Audit complete + 4 post-audit experiments rejected — strategy shelved.** 2026-04-12 audit retracted Eval 11/12/17/18 (walk-forward label leak + test-set pause tuning). Honest best (`conf_70 + tp/sl guard + 1x / 20% + 24h pause`) is +6.0% CAGR / -18.4% DD / holdout ≈ -5%. Post-audit: Stage 1 regression labels, Stage 2 v9 structure token, v10 (30d VP × 90d temporal), and both-sides short overlay all rejected on holdout. The audit's "most credible unexplored direction" (regime-aware both-sides) is now closed. Does not beat passive SPY. Project paused with infra preserved. See `experiments/EVAL_AUDIT.md` + `experiments/EVAL_TRANSFORMER.md` §v10. |
+| 3 | ML Model Development | **Audit complete + 5 post-audit experiments rejected. v11 identified the Phase 3 binding constraint (label formula geometry leak) — project reopens under "experimental playground" framing.** 2026-04-12 audit retracted Eval 11/12/17/18. Honest best (`conf_70 + tp/sl guard + 1x / 20% + 24h pause`) is +6.0% CAGR / -18.4% DD / holdout ≈ -5%. Rejected post-audit: Stage 1 regression, Stage 2 v9 structure token, v10 (30d VP × 90d temporal), both-sides short overlay, v11 absolute-VP @ 15m. The v11 post-mortem exposed that **every Phase 3 label formula shared inputs with VP features**, making the VP hypothesis unfalsifiable. Next: triple-barrier labels + v11-full vs v11-nopv ablation = first falsifiable VP test. See `experiments/LABEL_REDESIGN.md`, `EVAL_AUDIT.md` §9, `MODEL_HISTORY.md` §§26–29. |
 | 4 | Kraken API Integration | Not started — not green-lit |
 | 5 | Trading Strategy & Execution | Not started |
 | 6 | Live Trading & Monitoring | Not started |

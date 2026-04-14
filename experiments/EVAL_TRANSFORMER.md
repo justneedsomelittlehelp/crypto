@@ -723,3 +723,43 @@ Enabled Apple MPS backend for training. ~2x speedup over CPU. Full walk-forward:
 
 ### Pipeline optimization
 VP structure feature computation optimized with cumulative sum + peak cache: **2.8 seconds** for 84k rows (was ~30 minutes). 640x speedup. Enables 15min data scaling.
+
+---
+
+## Post-audit evals — v10, v11 (2026-04-12 → 2026-04-13)
+
+⚠ Read `EVAL_AUDIT.md` §§1–9 and `MODEL_HISTORY.md` §§26–28 before interpreting these. Evals 11/12/17/18 above this line are **retracted**; v10 and v11 are new post-audit experiments under the clean walk-forward protocol with 14-day embargo.
+
+### v10 — 90d temporal × 30d VP (REJECTED, 2026-04-12)
+
+Lookback reallocation: 180d VP → 30d VP, 30d temporal window → 90d temporal window. Same v6-prime architecture, same labels. Holdout CAGR essentially unchanged from v6-prime honest baseline (≈−5%). Rejected — reallocating the lookback budget between spatial and temporal dimensions does not unlock new signal. Full details in `MODEL_HISTORY.md` §26. Artifacts: `src/models/architectures/v10_long_temporal.py`, `src/models/eval_v10.py`, `experiments/eval_v10_results.json`.
+
+### v10 + mirror-short both-sides overlay (REJECTED, 2026-04-13)
+
+Tested the "regime-aware both-sides" direction flagged in the audit as most credible unexplored. Applied a bear-regime short overlay to v10 predictions. Finding: the apparent bear-short EV is a **first-hit mechanics artifact** — an unconditional short baseline captures the entire effect, and every logit-filtered v10 variant underperforms it. Formally closed. Details: `MODEL_HISTORY.md` §27. Artifacts: `src/models/backtest_v10_both_sides.py`, `experiments/backtest_v10_both_sides.json`.
+
+### v11 — absolute-range VP @ 15m (REJECTED, root cause identified, 2026-04-13)
+
+Largest reframing since v6. Three stacked changes:
+
+1. Representation: relative log-distance VP → absolute visible-range VP + hard one-hot self-channel + `price_pos`/`range_pct` scalars
+2. Resolution: 1h → 15m (357k rows, sample/param 14:1)
+3. Architecture: new `AbsVPv11` with 2-channel spatial attention (25.6k params)
+
+**Overall accuracy**: 64.3%. **Holdout**: raw long −14.1% CAGR / 51% win; no filter stack rescued it (range −15% to −10%). **Key failure**: confidence is uncalibrated (threshold sweeps don't shift any metric).
+
+**Root cause — label formula leaks range geometry into labels:**
+
+| asym band | n | pos_rate |
+|---|---|---|
+| `[0.0, 0.5)` | 65,359 | **88.5%** |
+| `[0.5, 0.8)` | 14,231 | 70.2% |
+| `[0.8, 1.2)` | 14,809 | 51.7% |
+| `[1.2, 2.0)` | 22,211 | 38.3% |
+| `[2.0, ∞)` | 54,386 | **18.6%** |
+
+`asym = TP_pct / SL_pct`, where both are derived from `(window_hi, window_lo, close)` — columns the model sees as features. A free classifier predicting "label=1 iff asym<0.8" scores ~80% accuracy before any ML. v11's 64.3% is **below the free classifier**. v6-prime and v10 had the same coupling at lower intensity — everything in Phase 3 that looked like edge was partly label bias.
+
+**v11 is the most productive rejection in the project** because it identified the binding constraint that made all Phase 3 experiments unfalsifiable. Next experiment: triple-barrier labels + v11-full vs v11-nopv ablation. Full writeup in `experiments/LABEL_REDESIGN.md`, history in `MODEL_HISTORY.md` §28.
+
+Artifacts: `src/data/compute_absvp_15m_30d.py`, `src/models/architectures/v11_abs_vp.py`, `src/models/eval_v11.py`, `src/models/analyze_v11_filters.py`, `experiments/eval_v11_results.json`, `experiments/v11_predictions.npz`.

@@ -13,26 +13,37 @@ For per-file inventory, see each directory's `README.md`. This section lists onl
 ### Active eval scripts
 | Path | Purpose |
 |------|---------|
-| `src/models/eval_v6_prime.py` | ⭐⭐ Current best — v6-prime + 3-seed ensemble + SWA + filter analysis |
+| `src/models/eval_v6_prime.py` | ⭐⭐ Current nominal best — v6-prime + 3-seed ensemble + SWA + filter analysis |
 | `src/models/run_backtest.py` | ⭐⭐ Realistic backtest engine driver |
+| `src/models/eval_v10.py` | v10 (90d temporal × 30d VP). REJECTED post-audit. |
+| `src/models/eval_v11.py` | v11 (abs-VP @ 15m, 2-channel spatial attention). REJECTED, root cause = label leak. Supports `--spatial --temporal --tag --seeds` flags for variant sweeps. |
+| `src/models/analyze_v11_filters.py` | Post-hoc filter analysis for v11 predictions. `--tag` / `--npz` flags. Outputs in-sample vs holdout CAGR / DD / EV across confidence + asymmetry sweeps. |
+| `src/models/backtest_v10_both_sides.py` | Mirror-short overlay on v10 predictions. REJECTED (first-hit geometry artifact). |
 | `src/models/eval_2plus1.py` | Reference: v7/v8 (2+1 layers) on 1h |
 | `src/models/eval_15min.py` | Reference: v6/v8 on 15min data |
 
 ### Frozen architectures (`src/models/architectures/`)
 | File | Architecture |
 |------|--------------|
-| `v6_prime_vp_labels.py` | ⭐⭐ Current best (TemporalEnrichedV6Prime) |
+| `v6_prime_vp_labels.py` | ⭐⭐ Nominal best (TemporalEnrichedV6Prime) |
 | `v6_temporal_enriched.py` | v6 baseline (1+1 enriched) |
 | `v8_enriched_2plus1.py` | v8 (2+1 enriched) |
 | `v7_simple_2plus1.py` | v7 (2+1 simple) |
 | `v5_dualbranch_cls.py` | v5 (DualBranch, abandoned) |
 | `v2_temporal.py` | v2 (historical baseline) |
+| `v10_long_temporal.py` | v10 (n_days=90 subclass of v6-prime). REJECTED. |
+| `v11_abs_vp.py` | v11 (2-channel spatial attention, pre-aggregated day tokens). REJECTED. |
 
 ### Frozen feature pipelines (`src/features/pipelines/`)
 | File | Features | Used by |
 |------|----------|---------|
 | `v1_raw.py` | 68 (50 VP + 10 derived + 8 VP structure) | v6, v6-prime, v8 |
 | `v2_scaled.py` | 60 (no VP structure, z-scored) | v7 |
+
+**v11 uses no frozen pipeline** — features are built inline in
+`eval_v11.py` directly from `BTC_15m_ABSVP_30d.csv`, with day-token
+aggregation done once on CPU via pandas rolling ops. Day token width =
+110 (50 vp_abs + 50 self + 8 daily candle + 2 scalars).
 
 ### Backtest module (`src/backtest/`)
 | File | Purpose |
@@ -45,16 +56,20 @@ For per-file inventory, see each directory's `README.md`. This section lists onl
 |------|---------|
 | `__main__.py` | CLI: `python -m src.data scrape [timeframe]`, `validate` |
 | `scraper.py` | Multi-exchange OHLCV fetcher |
-| `volume_profile.py` | 50-bin VP computation |
+| `volume_profile.py` | 50-bin relative-VP computation (default pipeline) |
+| `compute_vp_30d.py` | One-shot generator for `BTC_1h_RELVP_30d.csv` (v10 experiment) |
+| `compute_absvp_15m_30d.py` | One-shot generator for `BTC_15m_ABSVP_30d.csv` (v11 experiment, absolute visible-range VP + self-channel) |
 | `funding_rate.py` | Binance + Gate.io merged funding rate |
 | `validator.py` | CSV sanity checks |
 
 ### Documentation
 | File | Purpose |
 |------|---------|
-| `experiments/MODEL_HISTORY.md` | ⭐ Living doc: every architecture decision (RNN → current best) |
+| `experiments/MODEL_HISTORY.md` | ⭐ Living doc: every architecture decision (RNN → v11) |
 | `experiments/STRATEGY.md` | User's manual trading strategy |
-| `experiments/EVAL_TRANSFORMER.md` | Per-eval results (Eval 1-12) |
+| `experiments/EVAL_TRANSFORMER.md` | Per-eval results (Evals 1–12 retracted, post-audit v10/v11 appended) |
+| `experiments/EVAL_AUDIT.md` | Audit post-mortem §§1–8 + post-audit rejection log §9 (v10/both-sides/v11) |
+| `experiments/LABEL_REDESIGN.md` | ⭐ v11 post-mortem + triple-barrier label options + decisive VP ablation plan |
 | `experiments/RUN_INDEX.md` | Maps run_* directories to evals |
 
 ## Data schema
