@@ -800,3 +800,45 @@ Holdout accuracy lift (+5.02 pp) exceeds in-sample lift (+2.62 pp) — VP featur
 **What this means for Phase 3**: the central hypothesis (VP features carry ML-exploitable support/resistance signal) is **supported for the first time** under real execution — the ablation Δ is unambiguously positive at every reasonable filter. But the magnitude isn't deployment-ready. Sample count is the binding constraint: 20-30 trades × ~0.3% net EV per trade cannot compound into positive CAGR after fees over 278 days. The next experiment (regime conditioning features per `MULTI_ASSET_PLAN.md` §REFRAME) attacks the fold 12 / regime-change problem directly, which is the specific thing dragging holdout CAGR negative for both full and nopv.
 
 Artifacts: `experiments/eval_v11_11_tb_full_results.json`, `experiments/eval_v11_11_tb_nopv_results.json`, `experiments/v11_11_tb_full_predictions.npz`, `experiments/v11_11_tb_nopv_predictions.npz`, `experiments/backtest_results_v11_tb.json` (real-engine source of truth).
+
+---
+
+## Eval 20 — v11-full-tb @ 1h prediction cadence (2026-04-15, single seed)
+
+**Full writeup**: `experiments/EVAL_CADENCE.md`. This section is the index entry.
+
+**Question**: does prediction cadence (how often we emit a prediction and realize a label) matter *independently* of data resolution (what the model sees)? Prior v11 runs collapsed these — 15m data fed 15m anchors. Separating them required only a stride mask on the eligibility grid; the model's 90-day input window still sees every 15m bar.
+
+**Config**: identical to Eval 19 (v11-full-tb) except `--stride 4` (1h cadence). Same feature pipeline, same triple-barrier labels, same walk-forward, same 50 epochs / 15 patience / 1 seed. Commit `e8e4681`.
+
+**Training time**: 26.7 min (vs ~1.5h for 15m baseline, ~4× faster as expected from the sample count reduction).
+
+**Overall walk-forward accuracy**: 0.5318 vs 15m's 0.5317 — **identical**. The cadence change did not damage raw classification quality; it changed *where* the model's confidence lands.
+
+**Real-engine backtest headline** (`conf75_pause24_pyr @ 1h`):
+- Full period: **+6.6% CAGR / −14.2% DD / 316 trades / 57.9% WR**
+- **Holdout: +6.1% CAGR / −2.7% DD / 51 trades / 60.8% WR** — **first positive real-engine holdout CAGR in project history**
+
+| Metric | v6-prime honest | v11-tb 15m conf80 (prior best) | **v11-tb 1h conf75-pyr** |
+|---|---|---|---|
+| Full CAGR | +6.0% | +1.8% | **+6.6%** |
+| Holdout CAGR | ~−5% | −1.5% | **+6.1%** |
+| Holdout DD | ~18.4% | −1.7% | **−2.7%** |
+| Holdout n | ~25 | 20 | **51** |
+
+**Non-pyramid comparison** (smaller trade counts, cleaner signal):
+
+| Variant | 15m CAGR | 15m DD | 15m n | 1h CAGR | 1h DD | 1h n |
+|---|---|---|---|---|---|---|
+| conf70_pause24 full | +0.3% | −14.9% | 271 | **+2.4%** | **−3.4%** | 57 |
+| conf75_pause24 full | +1.1% | −9.2% | 246 | **+2.4%** | **−2.4%** | 44 |
+| conf75_pause24 holdout | −4.0% | −4.2% | 24 | **+0.9%** | **−0.5%** | 8 |
+
+**Caveats (read before declaring victory)**:
+1. **Single seed**. 51 holdout trades × 60.8% WR has ~±13pp CI. Required follow-up: 3-seed re-run.
+2. **Confidence-scale compression**. 1h max prob = 0.773 → conf80 unreachable (0 trades on holdout). This is the match-epochs signature (4× fewer gradient steps → bias less converged). Threshold comparisons are not apples-to-apples across cadences; `conf75 @ 1h` ≈ quantile-match for `conf80 @ 15m`. Matched-gradient-steps re-run (200 epochs) needed to separate "cadence is the lever" from "undertraining masked it."
+3. **Fold 4 mode collapse**: zero longs on fold 4 (4,061 samples). Single-seed risk showing up — optimizer can degenerate on difficult regimes with 4× less data per fold.
+
+**Status**: PROMISING but NOT REPLICATED. This is the first v11 config with positive holdout CAGR under real execution — the direction is real enough to invest another 80 min of Colab in a 3-seed replication. Do not deploy or update build status claims until that passes.
+
+Artifacts: `experiments/v11_11_tb_full_c60m_predictions.npz`, `experiments/eval_v11_11_tb_full_c60m_results.json`, `experiments/backtest_results_v11_tb_cadence_ablation.json`.

@@ -557,3 +557,87 @@ translates that small positive bias into a compounding positive EV.
    — the end-to-end model is already picking up VP signal, and
    constraining the training set is less urgent than expanding the
    feature set.
+
+---
+
+## 2026-04-15 addendum — prediction cadence ablation
+
+**Full writeup**: `experiments/EVAL_CADENCE.md`. Short version below.
+
+The v11-full-tb result above leaves holdout CAGR net-negative at every
+filter under the real engine (−1.5% at conf80 was the best). One
+interpretation held the binding constraint was sample count; another
+— raised late 2026-04-14 — held that 15m *prediction* cadence was
+training the model on noise even though 15m *data* resolution is the
+right input.
+
+The two are separable: the model's 90-day input window already
+contains every 15m bar regardless of how often predictions are emitted.
+Striding anchors to 1h (STRIDE_BARS=4) gives ~4× fewer training
+samples but they're far less correlated, labels are less dominated by
+microstructure noise, and deployment cadence aligns with swing-trading.
+
+Implementation: commit `e8e4681`. Single run on Colab, same config,
+same seeds (1), match-epochs (50), `--stride 4`, output tag
+`11_tb_full_c60m`.
+
+### Headline result — first positive real-engine holdout CAGR in project history
+
+**`conf75_pause24_pyr @ 1h cadence`** (pyramid-on, conf ≥ 0.75, 24h post-SL pause):
+
+| | v6-prime honest | v11-tb 15m conf80 (prior best) | **v11-tb 1h conf75-pyr** |
+|---|---|---|---|
+| Full CAGR | +6.0% | +1.8% | **+6.6%** |
+| Full DD | −18.4% | −8.8% | **−14.2%** |
+| Full n | ~130 | 193 | 316 |
+| **Holdout CAGR** | ~−5% | −1.5% | **+6.1%** |
+| **Holdout DD** | ~18.4% | −1.7% | **−2.7%** |
+| Holdout n | ~25 | 20 | **51** |
+| Holdout WR | ~65% (leaked labels) | 60.0% | **60.8%** |
+
+Matches v6-prime on full-period CAGR, beats it on holdout CAGR by
+~11 pp, cuts holdout DD by ~7×. First v11 config whose holdout trade
+count (51) is large enough to not be a statistical punchline.
+
+The non-pyramid `conf75_pause24` at 1h is also positive on holdout
+(+0.9% CAGR, −0.5% DD, 62.5% WR) but only 8 trades.
+
+### What's identical between 15m and 1h
+
+Overall walk-forward accuracy: **0.5318 vs 0.5317**. The two models
+are the same classifier at the sample level. The cadence change didn't
+damage raw classification quality — it changed *where* the model's
+confidence lands, which the real engine + conf filter then turns into
+smaller drawdowns and a positive holdout CAGR.
+
+### Three caveats that keep this from being deployable evidence
+
+1. **Single seed.** 51 trades × 60.8% WR has ~±13pp CI on win rate.
+   Required follow-up: 3-seed re-run.
+2. **Confidence-scale compression** — the 1h model's max prob is
+   0.773, so conf80 is unreachable (0 trades). This is the
+   match-epochs signature: 4× fewer gradient steps → bias less
+   converged → logits tighter around 0. For fair comparison, read
+   `conf75 @ 1h` as the quantile equivalent of `conf80 @ 15m`.
+   Required follow-up: matched-gradient-steps re-run (200 epochs)
+   to separate "cadence is the lever" from "undertraining was
+   masking it."
+3. **Fold 4 mode collapse**: the 1h model predicts zero longs on
+   fold 4 (4,061 samples). Fold 5 nearly the same (77/3718). With
+   1 seed and ~4× less data per fold, the optimizer can degenerate
+   on difficult regimes. 3-seed re-run covers this.
+
+### Status
+
+**PROMISING BUT NOT REPLICATED.** Do not deploy. Do not update
+build-status claims to say "positive holdout CAGR" until the 3-seed
+replication passes. This is the first time Phase 3 has produced any
+config with positive holdout CAGR under the real engine — the
+direction is real enough to invest another 80 minutes of Colab in
+checking.
+
+**Next experiment**: 3-seed 1h-full-tb replication at match-epochs.
+If it holds, matched-gradient-steps follow-up. After that, envelope
+dynamics features (Δwindow_hi, Δwindow_lo, Δrange_pct) and the
+previously-planned regime conditioning features from
+`MULTI_ASSET_PLAN.md §REFRAME`.

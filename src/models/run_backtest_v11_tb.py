@@ -269,7 +269,18 @@ def main():
                     "scope": scope,
                     "cadence_minutes": preds[tag]["cadence_minutes"],
                 })
+                # Guard: when a variant produces 0 trades compute_metrics
+                # returns a sparse dict without annualized_return_pct. Fill
+                # a neutral row so downstream comparisons don't crash.
+                m.setdefault("final_equity", cfg.starting_capital)
+                m.setdefault("total_return_pct", 0.0)
+                m.setdefault("annualized_return_pct", 0.0)
+                m.setdefault("max_drawdown_pct", 0.0)
+                m.setdefault("sharpe_annualized", 0.0)
+                m.setdefault("n_trades", 0)
+                m.setdefault("win_rate", 0.0)
                 all_results.append(m)
+                note = "  [NO TRADES]" if m["n_trades"] == 0 else ""
                 print(
                     f"  {tag:<22} {variant_name:<22} {scope:<8} "
                     f"final=${m['final_equity']:>9,.0f}  "
@@ -278,7 +289,7 @@ def main():
                     f"DD={m['max_drawdown_pct']:>+6.1f}%  "
                     f"Sh={m['sharpe_annualized']:>+5.2f}  "
                     f"n={m['n_trades']:>4}  "
-                    f"win={m['win_rate']*100:>5.1f}%"
+                    f"win={m['win_rate']*100:>5.1f}%{note}"
                 )
 
     by_key = {(r["tag"], r["variant"], r["scope"]): r for r in all_results}

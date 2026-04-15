@@ -32,16 +32,17 @@ Read the relevant doc before modifying code in that domain:
 | Risk limits, circuit breakers, loss thresholds, safety rules | `arch-risk-safety.md` |
 | Looking up a file path, data column, config parameter | `arch-reference.md` |
 | User's trading strategy, model iteration reasoning | `experiments/STRATEGY.md` |
-| Vanilla RNN evals (4 evals, exhausted) | `experiments/EVAL_VANILLA_RNN.md` |
-| LSTM evals (7 evals, exhausted) | `experiments/EVAL_LSTM.md` |
-| 1D CNN evals (26 evals, best: 61.5% on 4h) | `experiments/EVAL_CNN.md` |
-| **Transformer evals (6 evals, best: 63.3% on 1h, 2+1 tested)** | `experiments/EVAL_TRANSFORMER.md` |
-| **TP/SL sweep (11 configs, long+short, FGI vs SMA regime)** | `experiments/EVAL_TPSL_SWEEP.md` |
-| **Dual-branch Transformer (VP + Candle, separate attention)** | `experiments/EVAL_DUAL_BRANCH.md` |
+| Vanilla RNN evals (4 evals, exhausted) — archived | `experiments/archive/historical_evals/EVAL_VANILLA_RNN.md` |
+| LSTM evals (7 evals, exhausted) — archived | `experiments/archive/historical_evals/EVAL_LSTM.md` |
+| 1D CNN evals (26 evals, best: 61.5% on 4h) — archived | `experiments/archive/historical_evals/EVAL_CNN.md` |
+| **Transformer evals (active, through Eval 20 cadence ablation)** | `experiments/EVAL_TRANSFORMER.md` |
+| TP/SL sweep (11 configs, long+short, FGI vs SMA regime) — archived | `experiments/archive/historical_evals/EVAL_TPSL_SWEEP.md` |
+| Dual-branch Transformer (VP + Candle, separate attention) — archived | `experiments/archive/historical_evals/EVAL_DUAL_BRANCH.md` |
 | **Model evolution history (living doc)** | `experiments/MODEL_HISTORY.md` |
 | **⚠ Audit post-mortem — retracts Eval 11/12/17/18** | `experiments/EVAL_AUDIT.md` |
 | **v10: 90-day temporal × 30-day VP (post-audit experiment)** | `architecture_docs/arch-ml-model.md` §v10 |
 | **Label redesign — triple-barrier options, v11 post-mortem** | `experiments/LABEL_REDESIGN.md` |
+| **⭐ Prediction cadence ablation — 1h vs 15m (first positive holdout, single seed)** | `experiments/EVAL_CADENCE.md` |
 | **Multi-asset plan — next experiment, BTC+ETH Stage 1 scope** | `experiments/MULTI_ASSET_PLAN.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
@@ -77,7 +78,7 @@ Read the relevant doc before modifying code in that domain:
 |-------|-------|--------|
 | 1 | Project Setup & Data Pipeline | **Complete** |
 | 2 | Feature Engineering | **Complete** |
-| 3 | ML Model Development | **Phase 3 reopened 2026-04-14 after decisive v11 triple-barrier ablation returned first clean positive VP ablation in project history. ⚠ The original "+11.6% CAGR" claim was retracted later the same day after real-engine backtest review.** Prior: 5 post-audit experiments rejected. v11 identified the binding constraint (all prior label formulas shared inputs with VP features, making the VP hypothesis unfalsifiable). 2026-04-14: triple-barrier labels + v11-full vs v11-nopv ablation → full beats nopv on every real-engine holdout filter (Δ +1.5 to +8.5 pp CAGR, +15 to +26 pp win rate). **v6-prime audited honest (+6.0% full-period CAGR / −18.4% DD) remains the nominal best by compound return**; v11-full-tb's best real-engine full-period CAGR is +1.8%, and holdout is −1.5% at conf≥0.80 (not +11.6% as originally reported). **v11 wins on drawdown shape** (1.7% holdout DD at conf80 vs v6p 18.4%, order of magnitude tighter) and holdout discrimination (60% WR on clean labels). Next: regime conditioning features (GLD/USO/DXY/VIX/FFR/yield curve) per `MULTI_ASSET_PLAN.md` §REFRAME, NOT multi-asset training — the user reframed the plan same day after pointing out cross-asset training is wrong for an individual swing trader. See `experiments/LABEL_REDESIGN.md` §Results (with retraction block), `EVAL_AUDIT.md` §9 Stage 6 (corrected), `MODEL_HISTORY.md` §§30–31 (corrected). |
+| 3 | ML Model Development | **Phase 3 reopened 2026-04-14 (v11-tb ablation) and 2026-04-15 (cadence ablation). ⭐ 2026-04-15: prediction cadence ablation produced first positive real-engine holdout CAGR in project history — single seed, NOT YET REPLICATED.** The 1h-cadence run (v11-full-tb at `--stride 4`, same model/data/labels as 15m baseline) achieved **+6.1% holdout CAGR / −2.7% DD / 51 trades / 60.8% WR at conf75-pyr**, matching v6-prime's nominal full-period CAGR (+6.6% vs +6.0%) while cutting holdout DD ~7× (2.7% vs 18.4%) and turning holdout CAGR positive for the first time. Overall walk-forward accuracy identical to 15m (0.5318 vs 0.5317) — the cadence change moved *where* confidence lands, not raw classification quality. Three caveats prevent deployment claims: (1) single seed, (2) confidence-scale compression (1h max prob = 0.773, conf80 unreachable — match-epochs undertraining signature), (3) fold 4 mode collapse (zero longs on 4,061 samples). **Prior (2026-04-14)**: v11-full vs v11-nopv triple-barrier ablation validated VP features for the first time (Δ +1.5 to +8.5 pp CAGR on every real-engine holdout filter). Before cadence ablation, v11-tb 15m conf80 was net-negative on holdout (−1.5% CAGR) and v6-prime honest (+6.0% full-period, −18.4% DD, holdout ~−5%) remained nominal best. **Next**: 3-seed 1h-full-tb replication at match-epochs, then matched-gradient-steps follow-up, then envelope dynamics features (Δwindow_hi/Δwindow_lo/Δrange_pct), then regime conditioning features per `MULTI_ASSET_PLAN.md` §REFRAME. See `experiments/EVAL_CADENCE.md` for the full cadence writeup, `LABEL_REDESIGN.md` §2026-04-15 addendum, `MODEL_HISTORY.md` §32, `EVAL_TRANSFORMER.md` §Eval 20. |
 | 4 | Kraken API Integration | Not started — not green-lit |
 | 5 | Trading Strategy & Execution | Not started |
 | 6 | Live Trading & Monitoring | Not started |
