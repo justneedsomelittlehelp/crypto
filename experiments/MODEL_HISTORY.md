@@ -1116,11 +1116,11 @@ On full holdout: sign-flip −4.3% / 50.0%, raw long −26.7% / 47.7%. The full 
 
 ---
 
-*Last updated: 2026-04-14 (corrected) after Stage 6 (triple-barrier decisive ablation) and the real-engine backtest review that retracted the analyzer-idealized CAGR numbers. Stage 7 (prediction cadence ablation) appended 2026-04-15 — see §32.*
+*Last updated: 2026-04-15 evening — Stage 7 (cadence ablation) single-seed "+6.1% holdout CAGR" retracted after 3-seed independent replication. See §32 evening addendum.*
 
 ---
 
-## 32. Post-audit Stage 7 — prediction cadence ablation (1h on 15m data) — 2026-04-15 — **FIRST POSITIVE REAL-ENGINE HOLDOUT CAGR (single seed, not replicated)**
+## 32. Post-audit Stage 7 — prediction cadence ablation (1h on 15m data) — 2026-04-15 — ⚠ **RETRACTED: single-seed result did NOT replicate across 3 independent seeds**
 
 **Full writeup**: `experiments/EVAL_CADENCE.md`.
 
@@ -1200,7 +1200,7 @@ v11-tb 1h matches v6-prime's nominal full-period CAGR (+6.6% vs +6.0%), **beats 
 3. **Envelope dynamics features** (Δwindow_hi, Δwindow_lo, Δrange_pct, bars_since_new_high/low) — orthogonal to cadence, came up in the same design discussion. The model currently sees a snapshot of the 30-day envelope but not its velocity.
 4. **Regime conditioning features** per `MULTI_ASSET_PLAN.md §REFRAME` — still next-next after cadence and envelope.
 
-### Status
+### Status (original, 2026-04-15 morning)
 
 **DIRECTION VALIDATED. MAGNITUDE NOT REPLICATED.** This is the first time Phase 3 has produced a positive real-engine holdout CAGR, and the shape of the result (small drawdown, higher win rate, concentrated high-confidence trades) is exactly what the "15m cadence was training on noise" hypothesis predicted. But it's one seed. Do not update `CLAUDE.md` build-status claims to say "deployable" or deploy a wrapper until the 3-seed replication passes.
 
@@ -1212,4 +1212,60 @@ v11-tb 1h matches v6-prime's nominal full-period CAGR (+6.6% vs +6.0%), **beats 
 
 ---
 
-*Last updated: 2026-04-15 after Stage 7 (prediction cadence ablation). Single-seed result is the first positive real-engine holdout CAGR in project history but not yet replicated. Next: 3-seed 1h replication, then matched-gradient-steps, then envelope dynamics features.*
+### ⚠ 2026-04-15 evening addendum — 3-seed replication retracts the holdout result
+
+The 3-seed replication ran the same config independently at `--base-seed 42/43/44` (commit `647cc24` added `--base-seed` so runs are actually independent; the earlier `--seeds 3` path does intra-run ensembling, not replication).
+
+**Walk-forward accuracy is stable.** Overall acc 0.5318 / 0.5224 / 0.5286 (mean 0.5276, spread 0.9pp). The cadence change doesn't damage or improve classification; same conclusion as the single-seed run.
+
+**Full-period backtest CAGR is stable.** At `conf75_pause24_pyr`: +6.6 / +5.2 / +6.5 (mean +6.1%, spread 1.4pp). Matches the single-seed number — the full-period result is real.
+
+**Holdout CAGR is NOT stable.** At `conf75_pause24_pyr` holdout:
+
+| | seed42 (= original Stage 7) | seed43 | seed44 | mean |
+|---|---|---|---|---|
+| Holdout CAGR | +6.1% | **0.0%** | **−3.0%** | **+1.0%** |
+| Holdout n_trades | 51 | **0** | **6** | 19 |
+| Holdout WR | 60.8% | N/A | 50.0% | |
+
+Seed43 produced **zero** holdout trades at conf75; seed44 produced **six**. The seed42 headline was one draw from a 9pp-spread distribution whose mean is barely positive.
+
+**At `conf70_pause24_pyr`** (lower threshold, trade count stable at ~60 holdout trades across seeds, so the comparison is like-with-like):
+
+| | seed42 | seed43 | seed44 | mean |
+|---|---|---|---|---|
+| Holdout CAGR | −10.6% | +9.8% | −6.3% | **−2.4%** (spread 20pp) |
+
+Under the threshold that *does* produce comparable trade counts across seeds, the holdout mean CAGR is **negative**.
+
+**What broke**: confidence calibration is unstable across seeds. Probability p50 varies 0.390 / 0.425 / 0.392 across seeds, and the tail compression at the top end varies even more. At conf75 the trade-count went 51 → 0 → 6. That's not a threshold, it's a coin flip. Any claim about "conf75 holdout CAGR" is claiming a property of something that doesn't robustly exist across training seeds.
+
+**What's now a known model failure, not noise**: all three seeds produced `n_long=0` on fold 4 (2022 H1 bear, 4061 samples each). Fold 4 mode collapse is deterministic, not a single-seed quirk. The model saturates to zero on that regime under match-epochs training.
+
+**Smoking gun**: seed42 was simultaneously the best walk-forward acc, the best conf75_pyr holdout CAGR, *and* the worst conf70_pyr holdout CAGR. Best-flipping-to-worst depending on which cut you take is the signature of seed noise dominating real signal.
+
+**Retractions:**
+- "First positive real-engine holdout CAGR in project history" — retracted, not reproducible
+- "Beats v6-prime on holdout by ~11 pp" — retracted, that compared v6-prime against the top of a high-variance distribution
+- Any fixed-threshold holdout comparison between 15m and 1h — retracted, the logit distributions shift across seeds so "conf75" isn't a fixed object
+
+**Kept (still defensible):**
+- Walk-forward acc equivalence (0.5317 vs 0.5276 mean across seeds)
+- Full-period CAGR at 1h is stable and comparable to v6-prime (+5.2 to +6.6% across seeds)
+- Full-period drawdown reduction at 1h is stable (−10 to −14% at 1h vs ~−40% at 15m pyramid)
+- Fold 4 mode collapse is now a known architectural limit under match-epochs, not seed noise
+- The methodological separation of data resolution from prediction cadence is sound; that stays
+
+**Revised next step**: matched-gradient-steps at 1h, 3 independent seeds from the start (200 epochs, `--base-seed {42,43,44}`). The hypothesis becomes specific and testable: under-convergence produces the calibration instability, so full training should (a) raise the confidence ceiling above 0.80 and (b) stabilize conf75/80 holdout trade counts across seeds. If (a) and (b) hold, matched-steps is the cleaner comparison and we can re-examine the holdout story. If they don't, the conf-threshold framing is fundamentally fragile and we should abandon it in favor of something robust to seed noise (e.g. trade every signal above 0.5 with position-sized confidence, or per-seed threshold calibration).
+
+**Envelope dynamics and regime features are deferred** until we have a reproducible baseline. Feature engineering on top of a seed-noise-dominated baseline is wasted effort.
+
+**3-seed artifacts**:
+- `experiments/v11_11_tb_full_c60m_seed{42,43,44}_predictions.npz`
+- `experiments/eval_v11_11_tb_full_c60m_seed{42,43,44}_results.json`
+- Code: commit `647cc24` (adds `--base-seed`)
+- Full post-mortem: `experiments/EVAL_CADENCE.md §9`
+
+---
+
+*Last updated: 2026-04-15 evening. Stage 7 single-seed positive holdout CAGR did not replicate across 3 independent seeds. Walk-forward acc and full-period CAGR are stable; holdout CAGR is dominated by confidence-calibration noise. Next: matched-gradient-steps at 1h cadence with 3 independent seeds from the start.*
