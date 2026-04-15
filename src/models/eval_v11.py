@@ -493,6 +493,9 @@ def train_one_seed(
     day_rows_gpu, last_bar_gpu, labels_gpu, day_offsets,
     device, use_amp: bool, pos_weight: torch.Tensor,
     n_spatial: int, n_temporal: int,
+    max_epochs: int = EPOCHS,
+    patience: int = EARLY_STOP_PATIENCE,
+    swa_start: int = SWA_START_EPOCH,
 ):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -519,7 +522,7 @@ def train_one_seed(
     swa_weights = None
     swa_count = 0
 
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in range(1, max_epochs + 1):
         model.train()
         train_loss_sum, train_n = 0.0, 0
         for batch_idx in iterate_batches(train_idx, BATCH_SIZE, shuffle=True):
@@ -559,7 +562,7 @@ def train_one_seed(
             print(f"    Epoch {epoch:3d} | TrL {train_loss:.4f} | VaL {val_loss:.4f} | VaAcc {val_acc:.4f}")
 
         # SWA
-        if epoch >= SWA_START_EPOCH:
+        if epoch >= swa_start:
             current_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             if swa_weights is None:
                 swa_weights = current_state
@@ -575,7 +578,7 @@ def train_one_seed(
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
-            if epochs_no_improve >= EARLY_STOP_PATIENCE:
+            if epochs_no_improve >= patience:
                 print(f"    Early stop at epoch {epoch}")
                 break
 
@@ -639,6 +642,19 @@ def parse_args():
                    help="base seed; per-fold seeds = base, base+1, ... "
                         "(default 42). Vary across runs for independent "
                         "replication instead of intra-run ensembling.")
+    p.add_argument("--epochs", type=int, default=EPOCHS,
+                   help=f"max training epochs per fold (default {EPOCHS}). "
+                        "For matched-gradient-steps at 1h cadence, use 200 "
+                        "(4x the 15m budget since stride=4 gives 4x fewer "
+                        "gradient updates per epoch).")
+    p.add_argument("--patience", type=int, default=EARLY_STOP_PATIENCE,
+                   help=f"early-stop patience in epochs (default "
+                        f"{EARLY_STOP_PATIENCE}). Scale proportionally with "
+                        "--epochs for matched-gradient-steps runs.")
+    p.add_argument("--swa-start", type=int, default=SWA_START_EPOCH,
+                   help=f"epoch at which SWA weight averaging starts "
+                        f"(default {SWA_START_EPOCH}). Scale proportionally "
+                        "with --epochs.")
     p.add_argument("--stride", type=int, default=STRIDE_BARS_DEFAULT,
                    help="prediction cadence in 15m bars. 1=15m (legacy), "
                         "4=1h, 16=4h. Model input window is unchanged — this "
@@ -696,7 +712,9 @@ def main():
     print(f"  BATCH:       {BATCH_SIZE}")
     print(f"  LR:          {LR}  (AdamW, wd={WEIGHT_DECAY})")
     print(f"  Dropout:     {DROPOUT}, label_smoothing={LABEL_SMOOTHING}")
-    print(f"  Seeds/fold:  {n_seeds}, SWA from epoch {SWA_START_EPOCH}")
+    print(f"  Epochs:      max={args.epochs}  patience={args.patience}  "
+          f"swa_start={args.swa_start}")
+    print(f"  Seeds/fold:  {n_seeds}  base_seed={args.base_seed}")
     print(f"  Results →    {results_path.name}")
     print(f"  Preds   →    {predictions_path.name}")
 
@@ -822,6 +840,9 @@ def main():
                 day_rows_gpu, last_bar_gpu, labels_gpu, day_offsets,
                 device, use_amp, pos_weight,
                 n_spatial=n_spatial, n_temporal=n_temporal,
+                max_epochs=args.epochs,
+                patience=args.patience,
+                swa_start=args.swa_start,
             )
             fold_logits = evaluate(
                 model, test_idx,
@@ -902,6 +923,10 @@ def main():
         "features_mode": features_mode,
         "tag": tag,
         "n_seeds": n_seeds,
+        "base_seed": args.base_seed,
+        "max_epochs": args.epochs,
+        "patience": args.patience,
+        "swa_start": args.swa_start,
         "n_days": N_DAYS,
         "bars_per_day": BARS_PER_DAY,
         "stride_bars": stride_bars,
