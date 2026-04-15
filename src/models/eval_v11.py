@@ -64,6 +64,19 @@ LOOKBACK_BARS = N_DAYS * BARS_PER_DAY  # 8640 (used only for sample eligibility)
 LABEL_MAX_BARS = 14 * BARS_PER_DAY     # 1344 bars = 14 days
 EMBARGO = pd.Timedelta(days=14)        # wall-clock, resolution-independent
 
+# Prediction cadence vs data resolution. Data is always 15m; the model's
+# input window always sees every 15m bar. STRIDE_BARS controls how often we
+# place training/eval *anchor* bars — i.e., how often the model emits a
+# prediction and a triple-barrier label is realized. Consecutive 15m anchors
+# are near-duplicates (features barely change, labels SNR is low), so
+# striding to 1h gives ~4× fewer but more independent samples without
+# touching the feature pipeline. Deployment is aligned: we trade at most
+# once per hour, not once per 15m.
+#   1  = legacy 15m cadence (reproduces current v11-tb numbers)
+#   4  = 1h cadence
+#   16 = 4h cadence
+STRIDE_BARS_DEFAULT = 1
+
 # Training
 BATCH_SIZE = 512     # Cap: spatial attention flattens (B, n_days) → B*90
                      # must stay ≤ 65535 (efficient-attention kernel limit).
@@ -622,6 +635,11 @@ def parse_args():
                         "'{s}{t}_{labels}_{features}' for unambiguous runs.")
     p.add_argument("--seeds", type=int, default=N_SEEDS,
                    help=f"seeds per fold (default {N_SEEDS})")
+    p.add_argument("--stride", type=int, default=STRIDE_BARS_DEFAULT,
+                   help="prediction cadence in 15m bars. 1=15m (legacy), "
+                        "4=1h, 16=4h. Model input window is unchanged — this "
+                        "only strides the anchor bars used as training/eval "
+                        "samples. Tag auto-appends _c{minutes}m when !=1.")
     return p.parse_args()
 
 
@@ -631,14 +649,18 @@ def main():
     n_temporal = args.temporal
     labels_mode = args.labels
     features_mode = args.features
+    stride_bars = args.stride
+    assert stride_bars >= 1, f"--stride must be >= 1, got {stride_bars}"
+    cadence_minutes = stride_bars * 15
+    cadence_suffix = "" if stride_bars == 1 else f"_c{cadence_minutes}m"
     if args.tag is not None:
         tag = args.tag
     elif labels_mode == "range" and features_mode == "full":
-        tag = f"{n_spatial}{n_temporal}"
+        tag = f"{n_spatial}{n_temporal}{cadence_suffix}"
     else:
         short_lbl = {"range": "rng", "triple_barrier": "tb"}[labels_mode]
         short_feat = {"full": "full", "nopv": "nopv"}[features_mode]
-        tag = f"{n_spatial}{n_temporal}_{short_lbl}_{short_feat}"
+        tag = f"{n_spatial}{n_temporal}_{short_lbl}_{short_feat}{cadence_suffix}"
     n_seeds = args.seeds
 
     results_path = _results_path(tag)
@@ -662,6 +684,8 @@ def main():
     print(f"  Layers:      spatial={n_spatial}  temporal={n_temporal}  tag={tag}")
     print(f"  Labels:      {labels_mode}")
     print(f"  Features:    {features_mode}")
+    print(f"  Cadence:     stride={stride_bars} bars ({cadence_minutes}m "
+          f"between anchors; data still 15m)")
     print(f"  N_DAYS:      {N_DAYS}  (lookback {LOOKBACK_BARS} bars @ 15m)")
     print(f"  LABEL_MAX:   {LABEL_MAX_BARS} bars (14 days)")
     print(f"  EMBARGO:     {EMBARGO}")
@@ -707,7 +731,25 @@ def main():
     min_history = (N_DAYS - 1) * BARS_PER_DAY
     has_history = np.arange(n) >= min_history
     has_label = ~np.isnan(labels_np)
-    eligible_mask = has_history & has_label
+
+    # Cadence mask: one anchor every STRIDE_BARS bars. Align anchors to
+    # wall-clock :00 of the chosen cadence so 1h anchors land on the hour,
+    # 4h anchors land on 00:00/04:00/08:00/..., etc. First row's minute
+    # determines the offset.
+    first_minute = dates[0].minute
+    assert first_minute % 15 == 0, (
+        f"first row minute {first_minute} is not 15m-aligned; cannot "
+        f"compute cadence anchor offset"
+    )
+    anchor_offset = ((-first_minute // 15) % stride_bars)
+    cadence_mask = ((np.arange(n) - anchor_offset) % stride_bars) == 0
+    print(
+        f"Cadence: stride={stride_bars} bars ({cadence_minutes}m), "
+        f"first_row={dates[0]}, anchor_offset={anchor_offset} bars, "
+        f"kept={cadence_mask.sum():,} / {n:,} rows"
+    )
+
+    eligible_mask = has_history & has_label & cadence_mask
     eligible_idx_np = np.where(eligible_mask)[0].astype(np.int64)
     print(f"\nEligible samples: {len(eligible_idx_np):,} / {n:,}")
 
@@ -858,6 +900,8 @@ def main():
         "n_seeds": n_seeds,
         "n_days": N_DAYS,
         "bars_per_day": BARS_PER_DAY,
+        "stride_bars": stride_bars,
+        "cadence_minutes": cadence_minutes,
         "label_max_bars": LABEL_MAX_BARS,
         "embargo_days": 14,
         "triple_barrier_k": TB_BARRIER_K if labels_mode == "triple_barrier" else None,
@@ -878,6 +922,8 @@ def main():
         close=np.array(all_close),
         tp_pct=np.array(all_tp),
         sl_pct=np.array(all_sl),
+        stride_bars=np.int64(stride_bars),
+        cadence_minutes=np.int64(cadence_minutes),
     )
     print(f"\nWrote {results_path}")
     print(f"Wrote {predictions_path}")

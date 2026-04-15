@@ -16,11 +16,13 @@ Four things to know about the adaptation:
 1. The engine expects `probs` (sigmoid of logits). The v11 npz stores
    logits, so we convert here.
 
-2. Bar counts in BacktestConfig are resolution-aware. v6-prime ran at
-   1h, v11 runs at 15m. We scale:
-     max_hold_bars:        14 * 24 (1h)  →  14 * 96 (15m) = 1344
-     post_sl_pause_bars:   24       (1h) →  24 * 4   (15m) = 96
-   Same wall-clock durations, different bar counts.
+2. Bar counts in BacktestConfig are resolution-aware. Underlying data
+   is 15m regardless of the model's prediction cadence (15m, 1h, 4h).
+   The engine walks the full 15m close path, so bar-based windows are
+   always in 15m:
+     max_hold_bars:        14 * 96 (15m) = 1344
+     post_sl_pause_bars:   24 * 4  (15m) = 96
+   Prediction cadence only changes how many anchors are fed in.
 
 3. Triple-barrier tp/sl are symmetric (tp_pct ≡ sl_pct ≡ barrier).
    That means the engine's `min_asymmetry` filter is a no-op at any
@@ -28,13 +30,24 @@ Four things to know about the adaptation:
    0.0 (keep everything) for tb runs.
 
 4. We run both `full` (entire walk-forward period) and `holdout`
-   (>= 2025-07-01) scopes, and both `tb_full` (with VP) and `tb_nopv`
-   (candle only) prediction files. 4 scope × filter combinations.
+   (>= 2025-07-01) scopes for every tag passed in.
 
 Usage:
+    # Default (15m cadence, compat with existing runs):
     python3 -m src.models.run_backtest_v11_tb
+
+    # 1h cadence ablation pair:
+    python3 -m src.models.run_backtest_v11_tb \\
+        --tags 11_tb_full_c60m,11_tb_nopv_c60m \\
+        --out backtest_results_v11_tb_c60m.json
+
+    # Both cadences in one run, to get the paired comparison table:
+    python3 -m src.models.run_backtest_v11_tb \\
+        --tags 11_tb_full,11_tb_nopv,11_tb_full_c60m,11_tb_nopv_c60m \\
+        --out backtest_results_v11_tb_cadence_ablation.json
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -52,12 +65,12 @@ from src.backtest.metrics import compute_metrics
 # ═══════════════════════════════════════════════════════════════════
 # Config
 # ═══════════════════════════════════════════════════════════════════
-BARS_PER_HOUR = 4      # 15m resolution
+BARS_PER_HOUR = 4      # 15m resolution of underlying price path
 BARS_PER_DAY = 96
 
-TAGS = ["11_tb_full", "11_tb_nopv"]
+DEFAULT_TAGS = ["11_tb_full", "11_tb_nopv"]
+DEFAULT_OUT = "backtest_results_v11_tb.json"
 HOLDOUT_START = pd.Timestamp("2025-07-01")
-RESULTS_PATH = EXPERIMENTS_DIR / "backtest_results_v11_tb.json"
 
 
 def _variant(
@@ -110,33 +123,48 @@ def load_tb_predictions(tag: str) -> dict:
         raise FileNotFoundError(f"Missing predictions file: {path}")
     d = np.load(path, allow_pickle=True)
     probs = sigmoid(d["logits"].astype(np.float64))
+    # Prediction cadence is stored in npz for runs produced after the
+    # cadence knob was added. Old files default to 15m (stride=1).
+    stride_bars = int(d["stride_bars"]) if "stride_bars" in d.files else 1
+    cadence_minutes = (
+        int(d["cadence_minutes"]) if "cadence_minutes" in d.files
+        else stride_bars * 15
+    )
     data = {
         "dates": pd.to_datetime(d["dates"]).values,
         "close": d["close"].astype(np.float64),
         "probs": probs,
         "tp_pct": d["tp_pct"].astype(np.float64),
         "sl_pct": d["sl_pct"].astype(np.float64),
+        "stride_bars": stride_bars,
+        "cadence_minutes": cadence_minutes,
     }
     # Labels are NaN for timeout samples under triple-barrier; the engine
     # doesn't care about labels (it walks the close path), but we drop
     # rows with NaN tp/sl to avoid any ambiguity.
     valid = np.isfinite(data["tp_pct"]) & np.isfinite(data["sl_pct"])
-    for k in data:
+    array_keys = ["dates", "close", "probs", "tp_pct", "sl_pct"]
+    for k in array_keys:
         data[k] = data[k][valid]
     print(
         f"  {path.name}: {len(data['dates']):,} rows  "
+        f"cadence={cadence_minutes}m  "
         f"{data['dates'][0]} → {data['dates'][-1]}  "
         f"probs p50={np.median(probs):.3f}"
     )
     return data
 
 
+ARRAY_KEYS = ("dates", "close", "probs", "tp_pct", "sl_pct")
+
+
 def slice_by_scope(data: dict, scope: str) -> dict:
     if scope == "full":
-        return data
+        return dict(data)
     start = np.datetime64(HOLDOUT_START)
     mask = data["dates"] >= start
-    return {k: v[mask] for k, v in data.items()}
+    out = {k: (data[k][mask] if k in ARRAY_KEYS else data[k]) for k in data}
+    return out
 
 
 def build_config(cfg: dict) -> BacktestConfig:
@@ -169,22 +197,61 @@ def run_one(data: dict, cfg: BacktestConfig) -> dict:
     return metrics
 
 
+def _pair_tag(tag: str) -> tuple[str, str]:
+    """Split a tag like '11_tb_full_c60m' into (base='full', cadence_suffix='_c60m').
+
+    Base is 'full' if the tag ends with 'full[...cadence]' and 'nopv' if it
+    ends with 'nopv[...cadence]'. Cadence suffix is '' for legacy 15m.
+    """
+    core = tag
+    cadence_suffix = ""
+    # Accept a trailing _c{N}m cadence marker
+    if "_c" in core and core.rsplit("_c", 1)[1].endswith("m"):
+        core, cad = core.rsplit("_c", 1)
+        cadence_suffix = f"_c{cad}"
+    if core.endswith("_full"):
+        return ("full", cadence_suffix)
+    if core.endswith("_nopv"):
+        return ("nopv", cadence_suffix)
+    return (tag, cadence_suffix)
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════
+def parse_args():
+    p = argparse.ArgumentParser(description="v11-tb real-engine backtest")
+    p.add_argument("--tags", type=str,
+                   default=",".join(DEFAULT_TAGS),
+                   help="comma-separated tag list. Each tag resolves to "
+                        "experiments/v11_{tag}_predictions.npz. For the "
+                        "cadence ablation pass "
+                        "'11_tb_full,11_tb_nopv,11_tb_full_c60m,11_tb_nopv_c60m'.")
+    p.add_argument("--out", type=str, default=DEFAULT_OUT,
+                   help="output json filename (under experiments/). "
+                        f"default: {DEFAULT_OUT}")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+    results_path = EXPERIMENTS_DIR / args.out
+
     print("=" * 78)
     print("  v11 TRIPLE-BARRIER BACKTEST — real engine (fees, slippage, latency)")
     print("=" * 78)
+    print(f"  Tags: {', '.join(tags)}")
+    print(f"  Out : {results_path.name}")
 
-    # Preload both prediction files once
+    # Preload prediction files once
     print("\nLoading predictions...")
-    preds = {tag: load_tb_predictions(tag) for tag in TAGS}
+    preds = {tag: load_tb_predictions(tag) for tag in tags}
 
     # Run all (tag × variant × scope) combinations
     all_results = []
     print("\nRunning backtests...")
-    for tag in TAGS:
+    for tag in tags:
         for variant_name, variant_cfg in VARIANTS.items():
             for scope in SCOPES:
                 data = slice_by_scope(preds[tag], scope)
@@ -200,10 +267,11 @@ def main():
                     "tag": tag,
                     "variant": variant_name,
                     "scope": scope,
+                    "cadence_minutes": preds[tag]["cadence_minutes"],
                 })
                 all_results.append(m)
                 print(
-                    f"  {tag:<12} {variant_name:<22} {scope:<8} "
+                    f"  {tag:<22} {variant_name:<22} {scope:<8} "
                     f"final=${m['final_equity']:>9,.0f}  "
                     f"ret={m['total_return_pct']:>+7.1f}%  "
                     f"CAGR={m['annualized_return_pct']:>+7.1f}%  "
@@ -213,40 +281,95 @@ def main():
                     f"win={m['win_rate']*100:>5.1f}%"
                 )
 
-    # ─── Comparison table: full vs nopv at each (variant, scope) ───
-    print("\n" + "=" * 102)
-    print("  COMPARISON — v11-full (with VP) vs v11-nopv (candle only) — same engine, same config")
-    print("=" * 102)
-    print(f"  {'Variant':<22} {'Scope':<8} "
-          f"{'full CAGR':>11} {'nopv CAGR':>11} {'Δ CAGR':>10}  "
-          f"{'full DD':>9} {'nopv DD':>9}  "
-          f"{'full trades':>12} {'nopv trades':>12}")
-    print("  " + "-" * 100)
-
-    # Index by (variant, scope) for easy lookup
     by_key = {(r["tag"], r["variant"], r["scope"]): r for r in all_results}
-    for variant_name in VARIANTS:
-        for scope in SCOPES:
-            f = by_key.get(("11_tb_full", variant_name, scope))
-            n = by_key.get(("11_tb_nopv", variant_name, scope))
-            if f is None or n is None:
+
+    # ─── Per-cadence comparison: full vs nopv at each (variant, scope) ───
+    # Group tags by their cadence suffix, emit one comparison block per cadence.
+    pair_tags = {tag: _pair_tag(tag) for tag in tags}
+    cadence_suffixes = sorted({cs for _, cs in pair_tags.values()})
+
+    for cad_suffix in cadence_suffixes:
+        label = "15m (legacy)" if cad_suffix == "" else f"{cad_suffix[2:]} cadence"
+        full_tag = next(
+            (t for t, (b, c) in pair_tags.items() if b == "full" and c == cad_suffix),
+            None,
+        )
+        nopv_tag = next(
+            (t for t, (b, c) in pair_tags.items() if b == "nopv" and c == cad_suffix),
+            None,
+        )
+        if full_tag is None or nopv_tag is None:
+            continue
+
+        print("\n" + "=" * 102)
+        print(f"  COMPARISON @ {label} — v11-full (VP) vs v11-nopv (candle only)")
+        print("=" * 102)
+        print(f"  {'Variant':<22} {'Scope':<8} "
+              f"{'full CAGR':>11} {'nopv CAGR':>11} {'Δ CAGR':>10}  "
+              f"{'full DD':>9} {'nopv DD':>9}  "
+              f"{'full trades':>12} {'nopv trades':>12}")
+        print("  " + "-" * 100)
+        for variant_name in VARIANTS:
+            for scope in SCOPES:
+                f = by_key.get((full_tag, variant_name, scope))
+                n = by_key.get((nopv_tag, variant_name, scope))
+                if f is None or n is None:
+                    continue
+                dC = f["annualized_return_pct"] - n["annualized_return_pct"]
+                print(
+                    f"  {variant_name:<22} {scope:<8} "
+                    f"{f['annualized_return_pct']:>+10.1f}% "
+                    f"{n['annualized_return_pct']:>+10.1f}% "
+                    f"{dC:>+9.1f}  "
+                    f"{f['max_drawdown_pct']:>+8.1f}% "
+                    f"{n['max_drawdown_pct']:>+8.1f}% "
+                    f"{f['n_trades']:>12} "
+                    f"{n['n_trades']:>12}"
+                )
+
+    # ─── Cadence ablation: same base (full or nopv) across cadences ───
+    if len(cadence_suffixes) > 1:
+        for base in ("full", "nopv"):
+            base_tags = [
+                (cs, t) for t, (b, cs) in pair_tags.items() if b == base
+            ]
+            if len(base_tags) < 2:
                 continue
-            dC = f["annualized_return_pct"] - n["annualized_return_pct"]
-            print(
-                f"  {variant_name:<22} {scope:<8} "
-                f"{f['annualized_return_pct']:>+10.1f}% "
-                f"{n['annualized_return_pct']:>+10.1f}% "
-                f"{dC:>+9.1f}  "
-                f"{f['max_drawdown_pct']:>+8.1f}% "
-                f"{n['max_drawdown_pct']:>+8.1f}% "
-                f"{f['n_trades']:>12} "
-                f"{n['n_trades']:>12}"
-            )
+            base_tags.sort(key=lambda x: 0 if x[0] == "" else int(x[0][2:-1]))
+
+            print("\n" + "=" * 102)
+            print(f"  CADENCE ABLATION — v11-{base}-tb across prediction cadences")
+            print("=" * 102)
+            header = f"  {'Variant':<22} {'Scope':<8}"
+            for cs, _ in base_tags:
+                lbl = "15m" if cs == "" else cs[2:]
+                header += f" {lbl+' CAGR':>12} {lbl+' DD':>10} {lbl+' n':>7}"
+            print(header)
+            print("  " + "-" * (len(header) - 2))
+            for variant_name in VARIANTS:
+                for scope in SCOPES:
+                    row = f"  {variant_name:<22} {scope:<8}"
+                    ok = True
+                    for _, tag in base_tags:
+                        r = by_key.get((tag, variant_name, scope))
+                        if r is None:
+                            ok = False
+                            break
+                        row += (
+                            f" {r['annualized_return_pct']:>+11.1f}%"
+                            f" {r['max_drawdown_pct']:>+9.1f}%"
+                            f" {r['n_trades']:>7}"
+                        )
+                    if ok:
+                        print(row)
 
     # Save
     output = {
         "metadata": {
-            "source_npz_files": [f"v11_{tag}_predictions.npz" for tag in TAGS],
+            "source_npz_files": [f"v11_{tag}_predictions.npz" for tag in tags],
+            "cadence_minutes_by_tag": {
+                tag: preds[tag]["cadence_minutes"] for tag in tags
+            },
             "engine": "src.backtest.engine.run_backtest",
             "resolution_bars_per_day": BARS_PER_DAY,
             "holdout_start": HOLDOUT_START.isoformat(),
@@ -256,7 +379,9 @@ def main():
                 "Includes Kraken fees (taker 0.26%, maker 0.16%), slippage "
                 "(0.05%/side), execution latency, 5k starting capital, "
                 "reserve + pyramid rules. Compare to analyze_v11_filters "
-                "CAGR numbers — those omit all frictions and will be higher."
+                "CAGR numbers — those omit all frictions and will be higher. "
+                "Cadence is read from each npz file; multi-cadence runs "
+                "produce both per-cadence comparisons and a cadence ablation."
             ),
         },
         "results": [
@@ -264,9 +389,9 @@ def main():
             for r in all_results
         ],
     }
-    with open(RESULTS_PATH, "w") as f:
+    with open(results_path, "w") as f:
         json.dump(output, f, indent=2, default=str)
-    print(f"\nWrote {RESULTS_PATH}")
+    print(f"\nWrote {results_path}")
 
 
 if __name__ == "__main__":
