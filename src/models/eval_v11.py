@@ -635,6 +635,10 @@ def parse_args():
                         "'{s}{t}_{labels}_{features}' for unambiguous runs.")
     p.add_argument("--seeds", type=int, default=N_SEEDS,
                    help=f"seeds per fold (default {N_SEEDS})")
+    p.add_argument("--base-seed", type=int, default=42,
+                   help="base seed; per-fold seeds = base, base+1, ... "
+                        "(default 42). Vary across runs for independent "
+                        "replication instead of intra-run ensembling.")
     p.add_argument("--stride", type=int, default=STRIDE_BARS_DEFAULT,
                    help="prediction cadence in 15m bars. 1=15m (legacy), "
                         "4=1h, 16=4h. Model input window is unchanged — this "
@@ -811,7 +815,7 @@ def main():
 
         seed_logits = []
         for seed_offset in range(n_seeds):
-            seed = 42 + seed_offset
+            seed = args.base_seed + seed_offset
             print(f"    [Seed {seed}]")
             model = train_one_seed(
                 seed, train_idx, val_idx,
