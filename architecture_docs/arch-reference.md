@@ -16,7 +16,8 @@ For per-file inventory, see each directory's `README.md`. This section lists onl
 | `src/models/eval_v6_prime.py` | ⭐⭐ Current nominal best — v6-prime + 3-seed ensemble + SWA + filter analysis |
 | `src/models/run_backtest.py` | ⭐⭐ Realistic backtest engine driver |
 | `src/models/eval_v10.py` | v10 (90d temporal × 30d VP). REJECTED post-audit. |
-| `src/models/eval_v11.py` | v11 (abs-VP @ 15m, 2-channel spatial attention). REJECTED, root cause = label leak. Supports `--spatial --temporal --tag --seeds` flags for variant sweeps. |
+| `src/models/eval_v11.py` | v11 (abs-VP @ 15m, 2-channel spatial attention). Under triple-barrier labels + matched-gradient-steps (200 epochs) this is the Stage 8 baseline. Supports `--spatial --temporal --tag --seeds --base-seed --epochs --patience --swa-start --stride` flags. |
+| `src/models/eval_v12.py` | ⭐ v12 (regime-aware, extends v11 with macro context). Adds `--regime full/none` for ablation. Requires `data/regime_hourly.csv` + `data/regime_daily.csv` from `src/data/fetch_regime.py`. |
 | `src/models/analyze_v11_filters.py` | Post-hoc filter analysis for v11 predictions. `--tag` / `--npz` flags. Outputs in-sample vs holdout CAGR / DD / EV across confidence + asymmetry sweeps. |
 | `src/models/backtest_v10_both_sides.py` | Mirror-short overlay on v10 predictions. REJECTED (first-hit geometry artifact). |
 | `src/models/eval_2plus1.py` | Reference: v7/v8 (2+1 layers) on 1h |
@@ -32,7 +33,8 @@ For per-file inventory, see each directory's `README.md`. This section lists onl
 | `v5_dualbranch_cls.py` | v5 (DualBranch, abandoned) |
 | `v2_temporal.py` | v2 (historical baseline) |
 | `v10_long_temporal.py` | v10 (n_days=90 subclass of v6-prime). REJECTED. |
-| `v11_abs_vp.py` | v11 (2-channel spatial attention, pre-aggregated day tokens). REJECTED. |
+| `v11_abs_vp.py` | v11 (2-channel spatial attention, pre-aggregated day tokens). Frozen — base for v12. |
+| `v12_regime.py` | ⭐ v12 (v11 + regime encoder). 3-layer 1D conv (kernels 3/6/12h) over 72h hourly macro + 6 daily regime scalars in day enrichment. 31,665 params (+6,064 vs v11). |
 
 ### Frozen feature pipelines (`src/features/pipelines/`)
 | File | Features | Used by |

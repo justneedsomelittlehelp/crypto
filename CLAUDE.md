@@ -43,7 +43,9 @@ Read the relevant doc before modifying code in that domain:
 | **v10: 90-day temporal × 30-day VP (post-audit experiment)** | `architecture_docs/arch-ml-model.md` §v10 |
 | **Label redesign — triple-barrier options, v11 post-mortem** | `experiments/LABEL_REDESIGN.md` |
 | **⭐ Prediction cadence ablation — 1h vs 15m, match-epochs + matched-gradient-steps** | `experiments/EVAL_CADENCE.md` |
-| **Multi-asset plan — next experiment, BTC+ETH Stage 1 scope** | `experiments/MULTI_ASSET_PLAN.md` |
+| **⭐ v12 regime-aware model (conv encoder + macro day enrichment)** | `src/models/architectures/v12_regime.py`, `src/models/eval_v12.py` |
+| **Regime data pipeline (VIX/DXY/GLD/USO hourly + FRED daily)** | `src/data/fetch_regime.py` |
+| **Multi-asset plan → reframed as regime features plan** | `experiments/MULTI_ASSET_PLAN.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
 ## Key Data
