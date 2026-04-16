@@ -1,12 +1,12 @@
 # EVAL — Prediction Cadence Ablation (v11-full-tb, 15m vs 1h)
 
-> **⚠ STATUS 2026-04-15 (evening) — STAGE 7 "+6.1% holdout CAGR" RETRACTED.** 3-seed independent replication did **not** reproduce the positive holdout result. Seed42 (= original Stage 7) was the top of the distribution on every holdout variant tested. Full-period CAGR *is* stable across seeds; holdout CAGR is not. The cadence change remains architecturally defensible (walk-forward acc identical to 15m, drawdowns cleaner) but the deployment headline is gone. See §9 for the 3-seed post-mortem — read this first before trusting anything else in this doc.
+> **STATUS 2026-04-16 — Matched-gradient-steps (200 epochs) confirms undertraining hypothesis.** Confidence ceiling rises to 0.94 (was 0.77), threshold trade counts stabilize across seeds (conf75 holdout: 135/116/123 vs 51/0/6 on match-epochs), fold 4 mode collapse resolved. **All 3 seeds produce positive holdout CAGR at conf75_pyr** (+20.0/+6.2/+4.0%, mean +10.1%) — first time any config has achieved this. Non-pyramid conf75 shows a reproducible but tiny edge (+0.7% mean, 60.7% WR, 20 trades, 1pp spread). **Red flag**: fold 12 (2026 Q1) raw accuracy crashes to ~30% on all seeds — but confidence-filtered behavior is seed-dependent (59.1% precision at conf80 on seed42, 0% on seed43). Regime features now the highest-priority next experiment. See §10 for the full matched-gradient-steps writeup.
 >
-> **Original status (kept for history)**: 2026-04-15 — first 1h cadence run complete (single seed, match-epochs). Produces the **first positive real-engine holdout CAGR in project history**. Not yet replicated across seeds. DO NOT deploy on this evidence alone.
+> **Prior status (2026-04-15 evening)**: Stage 7 single-seed "+6.1% holdout CAGR" retracted after 3-seed match-epochs replication. See §9.
 >
-> **Read this when**: continuing the cadence experiment, deciding whether to run the matched-gradient-steps follow-up, or debugging the confidence-calibration instability.
+> **Read this when**: continuing the cadence experiment, evaluating matched-gradient-steps results, or planning regime features.
 >
-> **Related**: `LABEL_REDESIGN.md` (the v11-full-tb baseline), `EVAL_TRANSFORMER.md §Cadence`, `MODEL_HISTORY.md §32`.
+> **Related**: `LABEL_REDESIGN.md` (v11-full-tb baseline), `EVAL_TRANSFORMER.md §Cadence`, `MODEL_HISTORY.md §32–33`.
 
 ---
 
@@ -340,6 +340,186 @@ Envelope dynamics and regime features are deferred **until we have a reproducibl
 - `experiments/v11_11_tb_full_c60m_seed44_predictions.npz` + `eval_v11_11_tb_full_c60m_seed44_results.json`
 - Code: commit `647cc24 feat(v11): add --base-seed for independent-run replication`
 - Raw backtest tables from the 3 per-seed runs are in the session transcript; not persisted to a single JSON file because the backtest script overwrites its output (next time: write per-seed output files explicitly).
+
+---
+
+## 10. ⭐ Matched-gradient-steps (200 epochs, 3 independent seeds) — 2026-04-16
+
+Run: 3 independent training runs at `--stride 4 --seeds 1 --base-seed {42,43,44} --epochs 200 --patience 60 --swa-start 60` (commit `2b3d7c3` added `--epochs/--patience/--swa-start` flags). This gives 4× more gradient updates than match-epochs (50 epochs), matching the 15m baseline's total optimizer budget. Patience and SWA-start scaled proportionally (15→60). ~71 min per seed on Colab A100.
+
+### 10.1 Undertraining hypothesis — CONFIRMED
+
+The three testable predictions from §9.6:
+
+**1. Does max prob rise above 0.80?** YES.
+
+| Seed | match-epochs max | mgs max | match-epochs p50 | mgs p50 |
+|---|---|---|---|---|
+| 42 | 0.773 | **0.940** | 0.392 | **0.547** |
+| 43 | 0.777 | **0.939** | 0.425 | **0.533** |
+| 44 | 0.770 | **0.945** | 0.390 | **0.512** |
+
+Confidence ceiling nearly doubled in logit-space. conf80 is now reachable on all seeds.
+
+**2. Do conf75/80 holdout trade counts stabilize across seeds?** YES.
+
+| Threshold | match-epochs holdout n | mgs holdout n |
+|---|---|---|
+| conf75_pyr | 51 / 0 / 6 | **135 / 116 / 123** |
+| conf80_pyr | 0 / 0 / 0 | **114 / 94 / 96** |
+
+The 51→0→6 collapse at conf75 is gone. Trade counts are now within ~15% of each other.
+
+**3. Does holdout CAGR mean ≥ 0%?** YES at every pyramid variant.
+
+### 10.2 Walk-forward accuracy — slight degradation
+
+| Seed | match-epochs | mgs | Δ |
+|---|---|---|---|
+| 42 | 0.5318 | 0.5007 | −3.1pp |
+| 43 | 0.5224 | 0.5074 | −1.5pp |
+| 44 | 0.5286 | 0.5323 | +0.4pp |
+| **mean** | **0.5276** | **0.5135** | **−1.4pp** |
+
+More training didn't improve raw classification — slight overfitting. But walk-forward acc was never the metric that mattered for backtest performance; confidence calibration was.
+
+### 10.3 Per-fold highlights
+
+**Fold 4 mode collapse — RESOLVED.** Match-epochs produced n_long=0 on all 3 seeds (known model failure). Matched-gradient-steps produces 1681/667/665 longs — the model now makes predictions. But the EV is heavily negative (−1.6%/−4.9%/−3.4% long_EV), so the model went from "correctly abstaining" to "confidently wrong" on the 2022 bear.
+
+**Fold 12 (2026 Q1) raw accuracy — CRASHED.**
+
+| Seed | match-epochs acc | mgs acc |
+|---|---|---|
+| 42 | 0.508 | **0.309** |
+| 43 | 0.493 | **0.333** |
+| 44 | 0.546 | **0.286** |
+
+All seeds at ~30% — worse than coin flip. See §10.5 for confidence-filtered analysis (the raw number is misleading).
+
+**Fold 11 (2025 H2) accuracy — improved on 2 of 3 seeds.**
+
+| Seed | match-epochs acc | mgs acc |
+|---|---|---|
+| 42 | 0.461 | 0.487 |
+| 43 | 0.457 | **0.524** |
+| 44 | 0.456 | **0.514** |
+
+Fold 11 went from uniformly sub-50% to slightly above. The positive holdout CAGR is mostly driven by fold 11.
+
+### 10.4 Backtest results — real engine
+
+#### `conf75_pause24_pyr` (the headline comparison)
+
+| | match-epochs | | mgs | |
+|---|---|---|---|---|
+| Seed | CAGR (holdout) | n | CAGR (holdout) | n |
+| 42 | +6.1% | 51 | **+20.0%** | 135 |
+| 43 | 0.0% | 0 | **+6.2%** | 116 |
+| 44 | −3.0% | 6 | **+4.0%** | 123 |
+| **mean** | **+1.0%** | **19** | **+10.1%** | **125** |
+| spread | 9.1pp | | 16.0pp | |
+
+All 3 seeds positive. Trade counts stable. Mean +10.1%. But seed42 at +20.0% looks like another lucky draw (16pp spread).
+
+Full-period at conf75_pyr: +6.5/+7.3/+12.4% CAGR (mean +8.7%), DD −43.8/−29.8/−24.3%, WR 60.5/60.6/62.9%.
+
+#### `conf80_pause24_pyr` (newly reachable — was 0 trades on match-epochs)
+
+| Seed | Holdout CAGR | Holdout DD | Holdout n | Holdout WR |
+|---|---|---|---|---|
+| 42 | **+9.5%** | −7.1% | 114 | 65.8% |
+| 43 | +0.5% | −5.2% | 94 | 59.6% |
+| 44 | +3.7% | −7.0% | 96 | 62.5% |
+| **mean** | **+4.6%** | **−6.4%** | **101** | **62.6%** |
+
+Trade counts stable (114/94/96). Tighter spread than conf75_pyr (9pp vs 16pp). Mean +4.6% with 62.6% WR is a reasonable signal if the regime concern (§10.5) can be addressed.
+
+#### `conf75_pause24` (non-pyramid — cleanest signal, no pyramiding amplification)
+
+| Seed | Holdout CAGR | Holdout DD | Holdout n | Holdout WR |
+|---|---|---|---|---|
+| 42 | +1.2% | −1.4% | 23 | 60.9% |
+| 43 | +0.2% | −1.4% | 20 | 60.0% |
+| 44 | +0.7% | −2.0% | 18 | 61.1% |
+| **mean** | **+0.7%** | **−1.6%** | **20** | **60.7%** |
+
+**Tightest results in project history.** 1pp spread on CAGR, 20 trades per seed, 60–61% WR uniformly, −1.4 to −2.0% DD. This is what a real but tiny edge looks like — reproducible across seeds, just not deployment-scale yet.
+
+#### `conf80_pause24` (non-pyramid, higher threshold)
+
+| Seed | Holdout CAGR | Holdout DD | Holdout n | Holdout WR |
+|---|---|---|---|---|
+| 42 | +0.4% | −2.4% | 20 | 60.0% |
+| 43 | −0.3% | −1.7% | 17 | 58.8% |
+| 44 | +0.2% | −2.0% | 18 | 61.1% |
+| **mean** | **+0.1%** | **−2.0%** | **18** | **60.0%** |
+
+Basically zero. The signal exists at conf75 but gets margined away by conf80's higher bar.
+
+### 10.5 Fold 12 under confidence filtering — the regime question
+
+Raw fold 12 accuracy is ~30%, but the backtest uses confidence-filtered predictions, not raw predictions. The question: does the model know it's uncertain on fold 12?
+
+**Fold 12 vs fold 11 confidence distribution (sigmoid of logits):**
+
+| | fold 11 p50 | fold 11 max | fold 12 p50 | fold 12 max |
+|---|---|---|---|---|
+| seed42 | 0.631 | 0.927 | 0.561 | 0.864 |
+| seed43 | 0.627 | 0.895 | 0.529 | 0.858 |
+| seed44 | 0.576 | 0.926 | **0.430** | 0.887 |
+
+The model IS more uncertain on fold 12 — lower p50, lower max. Seed44's fold-12 p50 is 0.430 (mostly predicting short), which is directionally appropriate for the Jan-Mar 2026 drawdown driven by tariff-related geopolitical events. This supports the interpretation that fold 12 isn't "model collapse" but "novel macro regime the model hasn't seen."
+
+**But: high-confidence precision on fold 12 splits catastrophically across seeds:**
+
+| conf≥ | seed42 prec | seed43 prec | seed44 prec |
+|---|---|---|---|
+| 0.60 | 34.2% | 56.0% | 51.1% |
+| 0.70 | 44.5% | **6.0%** | 49.2% |
+| 0.75 | 47.9% | **0.0%** | 37.1% |
+| 0.80 | **59.1%** | **0.0%** | **18.3%** |
+
+- **seed42**: conf80 precision is **59.1%** on fold 12 — better than fold 11's 58.3%. The filter works as designed.
+- **seed43**: 42 high-confidence longs, **ALL wrong** (0% precision at conf80). Confident and wrong.
+- **seed44**: 60 high-confidence longs, **18.3% correct** (82% wrong). Confident and wrong.
+
+**Interpretation:** the model reduces its confidence on fold 12 (fewer high-conf predictions overall), which is appropriate for a novel regime. But when it IS confident, the signal is unreliable — whether the confidence is correct or hallucinated depends on which training seed you got. The model can't distinguish "I see a pattern I've trained on" from "I'm extrapolating into a regime I haven't seen."
+
+This is the exact problem **regime features** are designed to solve. If the model had VIX/DXY/yield-curve as inputs, it could learn to be explicitly uncertain when the macro state is novel. Currently it's flying blind — VP patterns may look superficially similar across regimes even when the underlying driver is entirely different.
+
+### 10.6 What matched-gradient-steps proved
+
+**Confirmed:**
+- Undertraining was real: confidence ceiling rises from 0.77 to 0.94, p50 from ~0.40 to ~0.53, conf80 becomes reachable
+- Threshold trade counts stabilize: conf75_pyr holdout 135/116/123 vs 51/0/6
+- All 3 seeds positive at conf75_pyr holdout (first time any config achieves this)
+- Non-pyramid conf75 shows a **reproducible tiny edge**: +0.7% mean CAGR, 60.7% WR, 1pp seed spread
+- Fold 4 mode collapse resolves (model now makes predictions, though they're bad)
+
+**New concerns:**
+- Walk-forward acc drops ~1.4pp (mild overfitting)
+- Fold 12 raw accuracy crashes to ~30% (regime sensitivity, not calibration artifact)
+- Fold 12 high-confidence precision is seed-dependent (59%/0%/18% at conf80)
+- Pyramid holdout CAGR spread is still 16pp at conf75_pyr — magnitude remains seed-dominated
+- Full-period drawdown worsens significantly (−24 to −44% at conf75_pyr vs −10 to −14% on match-epochs)
+
+**The binding constraint has shifted.** It's no longer calibration instability (solved) or undertraining (solved). It's **regime awareness** — the model produces confident predictions in novel macro environments without knowing they're novel.
+
+### 10.7 Revised priority sequence
+
+1. **Regime features** (promoted from #4 to #1). VIX/DXY/yield-curve/FFR give the model a chance to learn "this macro state is novel → reduce confidence." Directly attacks the fold 12 problem. See `MULTI_ASSET_PLAN.md §REFRAME`.
+2. **Rolling retraining** (walk-forward retrain every 3 months). The fold 12 failure is partly staleness — training data ends months before holdout. Complementary to regime features, not a substitute.
+3. **Envelope dynamics** (Δwindow_hi, Δwindow_lo, Δrange_pct). Still orthogonal, still cheap. Run after regime features.
+
+Deployment recommendation: if deploying before regime features, use **non-pyramid conf75_pause24** (the +0.7% mean CAGR config). It's the only variant where the signal is reproducible, the drawdown is tiny (−1.6% mean), and pyramiding doesn't amplify regime-noise. Add a VIX-based circuit breaker (pause trading when VIX > N) as a manual regime filter until the model can do it natively.
+
+### 10.8 Artifacts (matched-gradient-steps)
+
+- `experiments/v11_11_tb_full_c60m_mgs_seed{42,43,44}_predictions.npz`
+- `experiments/eval_v11_11_tb_full_c60m_mgs_seed{42,43,44}_results.json`
+- `experiments/backtest_results_v11_tb_mgs_seed{42,43,44}.json`
+- Code: commit `2b3d7c3 feat(v11): add --epochs / --patience / --swa-start for matched-gradient-steps`
 
 ---
 

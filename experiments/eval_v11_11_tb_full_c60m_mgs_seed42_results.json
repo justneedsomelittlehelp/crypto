@@ -1,0 +1,135 @@
+{
+  "eval": "v11 tag=11_tb_full_c60m_mgs_seed42 \u2014 absolute-range VP @ 15m \u00d7 90-day temporal",
+  "csv": "BTC_15m_ABSVP_30d.csv",
+  "n_spatial_layers": 1,
+  "n_temporal_layers": 1,
+  "labels_mode": "triple_barrier",
+  "features_mode": "full",
+  "tag": "11_tb_full_c60m_mgs_seed42",
+  "n_seeds": 1,
+  "base_seed": 42,
+  "max_epochs": 200,
+  "patience": 60,
+  "swa_start": 60,
+  "n_days": 90,
+  "bars_per_day": 96,
+  "stride_bars": 4,
+  "cadence_minutes": 60,
+  "label_max_bars": 1344,
+  "embargo_days": 14,
+  "triple_barrier_k": 2.0,
+  "triple_barrier_vol_window": 288,
+  "n_params": 25601,
+  "overall_acc": 0.5007482919423056,
+  "total_time_min": 71.2,
+  "folds": [
+    {
+      "fold": 1,
+      "period": "2020-07-01 \u2192 2021-01-01",
+      "n_test": 4078,
+      "acc": 0.7076998528690535,
+      "n_long": 3243,
+      "long_ev_real": 3.5202343463897705,
+      "time_sec": 192.9
+    },
+    {
+      "fold": 2,
+      "period": "2021-01-01 \u2192 2021-07-01",
+      "n_test": 4024,
+      "acc": 0.4239562624254473,
+      "n_long": 2254,
+      "long_ev_real": -1.5085902214050293,
+      "time_sec": 259.0
+    },
+    {
+      "fold": 3,
+      "period": "2021-07-01 \u2192 2022-01-01",
+      "n_test": 4051,
+      "acc": 0.4359417427795606,
+      "n_long": 2318,
+      "long_ev_real": 0.18014489114284515,
+      "time_sec": 267.4
+    },
+    {
+      "fold": 4,
+      "period": "2022-01-01 \u2192 2022-07-01",
+      "n_test": 4061,
+      "acc": 0.48608717064762375,
+      "n_long": 1681,
+      "long_ev_real": -1.6138039827346802,
+      "time_sec": 265.8
+    },
+    {
+      "fold": 5,
+      "period": "2022-07-01 \u2192 2023-01-01",
+      "n_test": 3718,
+      "acc": 0.3975255513717052,
+      "n_long": 1817,
+      "long_ev_real": -1.1140862703323364,
+      "time_sec": 333.7
+    },
+    {
+      "fold": 6,
+      "period": "2023-01-01 \u2192 2023-07-01",
+      "n_test": 3757,
+      "acc": 0.5759914825658771,
+      "n_long": 1370,
+      "long_ev_real": 1.4132757186889648,
+      "time_sec": 334.1
+    },
+    {
+      "fold": 7,
+      "period": "2023-07-01 \u2192 2024-01-01",
+      "n_test": 3910,
+      "acc": 0.48081841432225064,
+      "n_long": 1433,
+      "long_ev_real": 1.0972570180892944,
+      "time_sec": 504.1
+    },
+    {
+      "fold": 8,
+      "period": "2024-01-01 \u2192 2024-07-01",
+      "n_test": 4079,
+      "acc": 0.606030889924001,
+      "n_long": 2532,
+      "long_ev_real": 0.9827054738998413,
+      "time_sec": 363.2
+    },
+    {
+      "fold": 9,
+      "period": "2024-07-01 \u2192 2025-01-01",
+      "n_test": 4146,
+      "acc": 0.47539797395079597,
+      "n_long": 2262,
+      "long_ev_real": 1.3301668167114258,
+      "time_sec": 387.6
+    },
+    {
+      "fold": 10,
+      "period": "2025-01-01 \u2192 2025-07-01",
+      "n_test": 3994,
+      "acc": 0.5297946920380571,
+      "n_long": 1835,
+      "long_ev_real": 0.33902034163475037,
+      "time_sec": 431.3
+    },
+    {
+      "fold": 11,
+      "period": "2025-07-01 \u2192 2026-01-01",
+      "n_test": 4095,
+      "acc": 0.4874236874236874,
+      "n_long": 2767,
+      "long_ev_real": -0.4712600111961365,
+      "time_sec": 438.7
+    },
+    {
+      "fold": 12,
+      "period": "2026-01-01 \u2192 2026-04-08",
+      "n_test": 2192,
+      "acc": 0.3093065693430657,
+      "n_long": 1523,
+      "long_ev_real": -1.8249889612197876,
+      "time_sec": 492.3
+    }
+  ]
+}

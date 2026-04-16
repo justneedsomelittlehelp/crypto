@@ -1116,7 +1116,7 @@ On full holdout: sign-flip −4.3% / 50.0%, raw long −26.7% / 47.7%. The full 
 
 ---
 
-*Last updated: 2026-04-15 evening — Stage 7 (cadence ablation) single-seed "+6.1% holdout CAGR" retracted after 3-seed independent replication. See §32 evening addendum.*
+*Last updated: 2026-04-16 — Stage 8 matched-gradient-steps confirmed undertraining, produced first all-seeds-positive holdout CAGR, regime awareness now binding constraint. See §33.*
 
 ---
 
@@ -1268,4 +1268,68 @@ Under the threshold that *does* produce comparable trade counts across seeds, th
 
 ---
 
-*Last updated: 2026-04-15 evening. Stage 7 single-seed positive holdout CAGR did not replicate across 3 independent seeds. Walk-forward acc and full-period CAGR are stable; holdout CAGR is dominated by confidence-calibration noise. Next: matched-gradient-steps at 1h cadence with 3 independent seeds from the start.*
+---
+
+## 33. Post-audit Stage 8 — matched-gradient-steps (200 epochs at 1h cadence) — 2026-04-16 — **undertraining confirmed, first all-seeds-positive holdout CAGR, regime-awareness now the binding constraint**
+
+**Full writeup**: `experiments/EVAL_CADENCE.md §10`.
+
+### The question
+
+Stage 7's 3-seed replication (§32 evening addendum) showed confidence-calibration instability: conf75 holdout trade counts went 51/0/6 across seeds because the model's max prob was ~0.77 (conf80 unreachable). Was this undertraining from match-epochs (4× fewer gradient updates than 15m baseline), or a genuine property of 1h prediction?
+
+### Implementation
+
+Same config as §32 except `--epochs 200 --patience 60 --swa-start 60` (4× the match-epochs budget, patience and SWA scaled proportionally). Commit `2b3d7c3` added the `--epochs/--patience/--swa-start` CLI flags. Three independent runs at `--base-seed {42,43,44}`. ~71 min per seed on Colab A100.
+
+### Results — undertraining hypothesis confirmed on 2 of 3 predictions
+
+**1. Confidence ceiling rose to 0.94** (was 0.77). p50 rose from ~0.40 to ~0.53. conf80 now reachable on all seeds. ✅
+
+**2. Threshold trade counts stabilized.** conf75_pyr holdout: 135/116/123 (was 51/0/6). conf80_pyr holdout: 114/94/96 (was 0/0/0). ✅
+
+**3. All 3 seeds positive at conf75_pyr holdout** — first time any configuration has achieved this:
+
+| Config | seed42 | seed43 | seed44 | mean | spread |
+|---|---|---|---|---|---|
+| conf75_pyr holdout CAGR | +20.0% | +6.2% | +4.0% | **+10.1%** | 16pp |
+| conf75_pyr holdout WR | 68.9% | 63.8% | 63.4% | 65.4% | |
+| conf75_pyr holdout n | 135 | 116 | 123 | 125 | |
+| conf80_pyr holdout CAGR | +9.5% | +0.5% | +3.7% | **+4.6%** | 9pp |
+| Non-pyr conf75 holdout CAGR | +1.2% | +0.2% | +0.7% | **+0.7%** | 1pp |
+| Non-pyr conf75 holdout WR | 60.9% | 60.0% | 61.1% | **60.7%** | |
+
+Non-pyramid conf75 is the cleanest signal in project history: +0.7% mean CAGR with 1pp seed spread, 60.7% WR, ~20 trades, −1.6% mean DD. Real edge, tiny magnitude.
+
+### Walk-forward accuracy — slight regression
+
+Overall acc: 0.5007/0.5074/0.5323 (mean 0.5135, was 0.5276 on match-epochs). ~1.4pp drop, mild overfitting from longer training. Walk-forward acc was never the binding metric — calibration was.
+
+### Fold 4 mode collapse — resolved but reveals overtraining
+
+Match-epochs: n_long=0 on all 3 seeds (known model failure). Matched-gradient-steps: 1681/667/665 longs — model now makes predictions on the 2022 bear fold. But long_EV is −1.6%/−4.9%/−3.4% — the model went from "correctly abstaining" to "confidently wrong."
+
+### Fold 12 (2026 Q1) — regime sensitivity, not calibration failure
+
+Raw accuracy crashed to 31%/33%/29% (all seeds, worse than coin flip). But the model IS more uncertain on fold 12 than fold 11: fold-12 prob p50 = 0.561/0.529/0.430 vs fold-11 p50 = 0.631/0.627/0.576. Fewer high-confidence predictions, which is appropriate for a novel geopolitical regime (tariff escalation, macro volatility).
+
+**Critical finding:** high-confidence precision on fold 12 is seed-dependent. At conf80: seed42 = **59.1%** (filter works), seed43 = **0.0%** (all wrong), seed44 = **18.3%** (mostly wrong). The model can't reliably distinguish "I see a trained pattern" from "I'm extrapolating into novelty." This is the attack surface regime features target.
+
+### Assessment
+
+The binding constraint has shifted:
+- ~~Calibration instability~~ → solved by matched-gradient-steps
+- ~~Undertraining~~ → solved
+- **Regime awareness** → the model has no macro-state inputs, so it can't learn to be uncertain in novel environments
+
+### Revised next steps
+
+1. **Regime features** (promoted to #1 — was #4). VIX/DXY/yield-curve/FFR as inputs per `MULTI_ASSET_PLAN.md §REFRAME`. Directly attacks fold 12.
+2. **Rolling retraining** — fold 12 failure is partly staleness, complementary to regime features.
+3. **Envelope dynamics** — still orthogonal, defer until after (1).
+
+**Artifacts**: `experiments/EVAL_CADENCE.md §10`, `eval_v11_11_tb_full_c60m_mgs_seed{42,43,44}_results.json`, `backtest_results_v11_tb_mgs_seed{42,43,44}.json`, commit `2b3d7c3`.
+
+---
+
+*Last updated: 2026-04-16. Stage 8 matched-gradient-steps confirmed undertraining hypothesis, produced first all-seeds-positive holdout CAGR (conf75_pyr mean +10.1%), and identified regime awareness as the new binding constraint. Regime features are next.*
