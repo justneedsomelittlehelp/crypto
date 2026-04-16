@@ -398,11 +398,14 @@ def main():
     print(f"  day_rows: {day_rows_gpu.shape}  ({day_rows_gpu.element_size() * day_rows_gpu.numel() / 1e6:.1f} MB)")
     print(f"  regime_hourly: {regime_hourly_gpu.shape}  ({regime_hourly_gpu.element_size() * regime_hourly_gpu.numel() / 1e6:.1f} MB)")
 
+    # Convert dates to tz-aware for fold boundary comparisons
+    dates = pd.DatetimeIndex(dates).tz_localize("UTC")
+
     # ─── Eligibility mask ───
     min_history = (N_DAYS - 1) * BARS_PER_DAY
     has_history = np.arange(n) >= min_history
     has_label = ~np.isnan(labels_np)
-    first_minute = pd.Timestamp(dates[0]).minute
+    first_minute = dates[0].minute
     assert first_minute % 15 == 0
     anchor_offset = ((-first_minute // 15) % stride_bars)
     cadence_mask = ((np.arange(n) - anchor_offset) % stride_bars) == 0
@@ -489,7 +492,7 @@ def main():
         fold_y = labels_np[test_np].astype(np.float32)
         fold_tp = tp_pct_np[test_np]
         fold_sl = sl_pct_np[test_np]
-        fold_dates = feats["dates"][test_np]
+        fold_dates = dates[test_np]
         fold_close = close_np[test_np]
 
         acc = float((preds == fold_y).mean())
