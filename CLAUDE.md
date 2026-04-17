@@ -46,6 +46,7 @@ Read the relevant doc before modifying code in that domain:
 | **⭐ v12 regime-aware model (conv encoder + macro day enrichment)** | `src/models/architectures/v12_regime.py`, `src/models/eval_v12.py` |
 | **Regime data pipeline (VIX/DXY/GLD/USO hourly + FRED daily)** | `src/data/fetch_regime.py` |
 | **Multi-asset plan → reframed as regime features plan** | `experiments/MULTI_ASSET_PLAN.md` |
+| **⭐ Feature statistical testing (Stage 1 IC screening, methodology + results)** | `stat_test/README.md`, `stat_test/how_to_stat_test.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
 ## Key Data

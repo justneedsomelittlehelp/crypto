@@ -13,7 +13,11 @@
 >
 > **Related docs**: `LABEL_REDESIGN.md` §Results (the positive v11-tb
 > finding), `MODEL_HISTORY.md` §§30–31, `EVAL_AUDIT.md` §9 Stage 6,
-> `STRATEGY.md` (user's manual trading philosophy).
+> `STRATEGY.md` (user's manual trading philosophy),
+> **`stat_test/README.md` (2026-04-17 Stage 1 univariate IC screening on
+> the regime features this plan proposed — results validate VIX-change
+> and DXY-return short-horizon signal, flag FFR/yield-curve/GLD/USO as
+> weak univariate candidates that may only work via regime conditioning).**
 
 ---
 

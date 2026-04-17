@@ -1333,3 +1333,26 @@ The binding constraint has shifted:
 ---
 
 *Last updated: 2026-04-16. Stage 8 matched-gradient-steps confirmed undertraining hypothesis, produced first all-seeds-positive holdout CAGR (conf75_pyr mean +10.1%), and identified regime awareness as the new binding constraint. Regime features are next.*
+
+---
+
+## 34. Stage 1 Univariate Feature Screening — 2026-04-17
+
+**Parallel track** to model training (not a new eval). Before committing compute to v12 ablations, ran cheap-to-expensive feature funnel Stage 1: monthly Spearman IC + t-stat vs BTC forward returns at 4h/24h/96h/168h horizons, in-sample pre-2025-10.
+
+**See `stat_test/README.md` for full methodology, results, and next-stage roadmap.**
+
+### Headline results
+
+- **VP shape features dominate** (vp_skew, vp_above_sum, vp_below_sum, vp_peak_offset, ceiling_dist): |t|≈8-10 at 168h. Confirms the v11-tb ablation finding: VP *structure* is the signal, not bin weights directly.
+- **FGI is the single strongest feature** (|t|=13, IC=-0.36 at 168h). Mean-reversion mechanism. Worth reconsidering the "VP-only" design principle.
+- **Multi-day returns are strong mean-reversion signals** (ret_72h/168h: |t|≈10-12 at 168h, all negative IC).
+- **Regime winners**: `vix_chg_24h` (|t|=4.4 at 4h), `dxy_ret_24h` (|t|=3.4 at 4h). Clear adds for v12.
+- **Regime weak univariately**: FFR, yield_curve, GLD, USO all |t|<2. Does **not** mean drop — they may only work as regime-conditioning variables (gating other features). Recommended next test: regime-conditioned IC (IC of vp_skew in high-VIX vs low-VIX buckets, etc).
+- **Time-of-day dead on BTC** (expected, 24/7 market). Keep in mind for NQ work.
+
+### Implication for v12
+
+Prioritize `vix_chg_24h` + `dxy_ret_24h` as direct input channels. Keep FFR + yield_curve but wire them through the regime-classifier / gating head, not as raw predictors.
+
+**Artifacts**: `stat_test/stage1_univariate_ic.py`, `stat_test/stage1_univariate_ic_results.csv`.
