@@ -1,0 +1,31 @@
+K = 3, features = ['gld_z', 'uso_z', 'cper_z', 'corn_z', 'dgs2_cr', 'yield_curve_cr']
+obs = 5002, range = 2012-08-07 → 2026-04-17
+converged = True, iters = 28
+
+=== Transition matrix (row = from, col = to) ===
+         r0      r1      r2  
+  r0   0.994  0.002  0.004
+  r1   0.004  0.936  0.060
+  r2   0.005  0.079  0.917
+
+=== Expected duration per regime (days) ===
+  r0: 156.9 days (p_stay = 0.994)
+  r1: 15.6 days (p_stay = 0.936)
+  r2: 12.0 days (p_stay = 0.917)
+
+=== Count / frequency per regime ===
+  r0: 2044 days (40.9%)
+  r1: 1656 days (33.1%)
+  r2: 1302 days (26.0%)
+
+=== Mean of TRANSFORMED features per regime (Gaussian emission means) ===
+                gld_z           uso_z          cper_z          corn_z         dgs2_cr  yield_curve_cr
+  r0           -0.016           0.038          -0.059          -0.002           0.730          -0.904
+  r1           -0.511           0.049          -0.019           0.230          -0.094           0.535
+  r2            0.691          -0.073           0.106          -0.284          -0.235           0.442
+
+=== Mean of RAW features per regime (for interpretability) ===
+                gld_z           uso_z          cper_z          corn_z         dgs2_cr  yield_curve_cr
+  r0          -0.0180          0.0370         -0.0568         -0.0027          0.7313         -0.9062
+  r1          -0.5117          0.0517         -0.0249          0.2319         -0.0984          0.5364
+  r2           0.6935         -0.0748          0.1095         -0.2853         -0.2273          0.4365

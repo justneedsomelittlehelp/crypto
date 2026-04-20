@@ -1,0 +1,33 @@
+Hierarchical HMM: outer(rates, K=2) × inner(commodities, K=[3, 2])
+Panel: 2012-08-07 → 2026-04-17, n=5002
+
+
+NQ=F — by OUTER state S:
+  S0: mean fwd20d = +0.0112  (n=2622)
+  S1: mean fwd20d = +0.0062  (n=2360)
+NQ=F — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0091  (n=749)
+  S0,z1: fwd20d = +0.0100  (n=986)
+  S0,z2: fwd20d = +0.0143  (n=887)
+  S1,z0: fwd20d = +0.0035  (n=1145)
+  S1,z1: fwd20d = +0.0088  (n=1215)
+
+ES=F — by OUTER state S:
+  S0: mean fwd20d = +0.0086  (n=2622)
+  S1: mean fwd20d = +0.0037  (n=2360)
+ES=F — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0080  (n=749)
+  S0,z1: fwd20d = +0.0086  (n=986)
+  S0,z2: fwd20d = +0.0092  (n=887)
+  S1,z0: fwd20d = +0.0014  (n=1145)
+  S1,z1: fwd20d = +0.0058  (n=1215)
+
+BTC — by OUTER state S:
+  S0: mean fwd20d = +0.0812  (n=1200)
+  S1: mean fwd20d = -0.0019  (n=2360)
+BTC — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0442  (n=343)
+  S0,z1: fwd20d = +0.1237  (n=419)
+  S0,z2: fwd20d = +0.0696  (n=438)
+  S1,z0: fwd20d = +0.0038  (n=1145)
+  S1,z1: fwd20d = -0.0072  (n=1215)

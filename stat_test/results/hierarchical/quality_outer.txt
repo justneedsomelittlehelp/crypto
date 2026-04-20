@@ -1,0 +1,75 @@
+Quality diagnostics for timeline: results/hierarchical/timeline.csv
+Regime column: outer  (unique values: [np.int64(0), np.int64(1), np.int64(2)])
+Panel: 2012-08-07 → 2026-04-17, n=5002
+Forward horizon: 20 trading days, log return
+
+★ = CI excludes 0 / pairwise significantly different at Bonferroni-adjusted α
+
+============================================================
+NQ=F
+============================================================
+ANOVA F = 28.15, p = 6.98e-13
+Variance reduction: 1.12%   (total var y = 0.00179)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0111  CI=[+0.0096, +0.0125]  n=2342 ★
+  r1: mean=+0.0125  CI=[+0.0102, +0.0149]  n=1244 ★
+  r2: mean=+0.0017  CI=[-0.0009, +0.0044]  n=1396
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/3):
+  r0 vs r1: t=-1.02  p=3.08e-01   
+  r0 vs r2: t=+6.03  p=1.97e-09  ★
+  r1 vs r2: t=+5.91  p=3.75e-09  ★
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR=+12.17%  Sharpe=+0.67  exp=100%  (asset valid days=5002)
+  r0 :   CAGR= +7.49%  Sharpe=+0.74  exp=46.8%
+  r1 :   CAGR= +4.32%  Sharpe=+0.49  exp=25.3%
+  r2 :   CAGR= +0.03%  Sharpe=+0.00  exp=27.9%
+
+============================================================
+ES=F
+============================================================
+ANOVA F = 34.80, p = 9.83e-16
+Variance reduction: 1.38%   (total var y = 0.00124)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0089  CI=[+0.0077, +0.0100]  n=2342 ★
+  r1: mean=+0.0089  CI=[+0.0071, +0.0106]  n=1244 ★
+  r2: mean=-0.0003  CI=[-0.0028, +0.0020]  n=1396
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/3):
+  r0 vs r1: t=+0.03  p=9.79e-01   
+  r0 vs r2: t=+6.68  p=3.05e-11  ★
+  r1 vs r2: t=+5.98  p=2.51e-09  ★
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR= +8.52%  Sharpe=+0.58  exp=100%  (asset valid days=5002)
+  r0 :   CAGR= +5.94%  Sharpe=+0.71  exp=46.8%
+  r1 :   CAGR= +3.07%  Sharpe=+0.46  exp=25.3%
+  r2 :   CAGR= -0.62%  Sharpe=-0.07  exp=27.9%
+
+============================================================
+BTC
+============================================================
+ANOVA F = 14.32, p = 6.40e-07
+Variance reduction: 0.80%   (total var y = 0.02841)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0510  CI=[+0.0411, +0.0619]  n=920 ★
+  r1: mean=+0.0217  CI=[+0.0158, +0.0280]  n=1244 ★
+  r2: mean=+0.0137  CI=[+0.0031, +0.0255]  n=1396 ★
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/3):
+  r0 vs r1: t=+4.71  p=2.74e-06  ★
+  r0 vs r2: t=+4.82  p=1.53e-06  ★
+  r1 vs r2: t=+1.25  p=2.11e-01   
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR=+39.45%  Sharpe=+0.58  exp=100%  (asset valid days=3580)
+  r0 :   CAGR=+19.18%  Sharpe=+0.62  exp=25.7%
+  r1 :   CAGR= +9.22%  Sharpe=+0.37  exp=35.3%
+  r2 :   CAGR= +7.13%  Sharpe=+0.16  exp=39.0%

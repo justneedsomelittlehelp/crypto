@@ -47,6 +47,7 @@ Read the relevant doc before modifying code in that domain:
 | **Regime data pipeline (VIX/DXY/GLD/USO hourly + FRED daily)** | `src/data/fetch_regime.py` |
 | **Multi-asset plan → reframed as regime features plan** | `experiments/MULTI_ASSET_PLAN.md` |
 | **⭐ Feature statistical testing (Stage 1 IC screening, methodology + results)** | `stat_test/README.md`, `stat_test/how_to_stat_test.md` |
+| **⭐ HMM macro-regime detector (frozen 2026-04-20) — iteration log, frozen config, key lessons** | `stat_test/HMM_LOG.md` |
 | Run folder → eval mapping | `experiments/RUN_INDEX.md` |
 
 ## Key Data

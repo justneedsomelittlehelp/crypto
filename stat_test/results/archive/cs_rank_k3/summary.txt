@@ -1,0 +1,31 @@
+K = 3, features = ['gld_ret20d', 'uso_ret20d', 'cper_ret20d', 'corn_ret20d']
+obs = 3736, range = 2016-01-25 → 2026-04-17
+converged = True, iters = 297
+
+=== Transition matrix (row = from, col = to) ===
+         r0      r1      r2  
+  r0   0.908  0.038  0.054
+  r1   0.040  0.896  0.064
+  r2   0.049  0.055  0.896
+
+=== Expected duration per regime (days) ===
+  r0: 10.8 days (p_stay = 0.908)
+  r1: 9.6 days (p_stay = 0.896)
+  r2: 9.6 days (p_stay = 0.896)
+
+=== Count / frequency per regime ===
+  r0: 1204 days (32.2%)
+  r1: 1164 days (31.2%)
+  r2: 1368 days (36.6%)
+
+=== Mean of TRANSFORMED features per regime (Gaussian emission means) ===
+           gld_ret20d      uso_ret20d     cper_ret20d     corn_ret20d
+  r0            0.468           0.034           0.550          -0.574
+  r1           -0.646           0.121           0.259           0.054
+  r2            0.307           0.027          -0.668           0.187
+
+=== Mean of RAW features per regime (for interpretability) ===
+           gld_ret20d      uso_ret20d     cper_ret20d     corn_ret20d     soyb_ret20d
+  r0           0.0282         -0.0019          0.0337         -0.0247         -0.0173
+  r1          -0.0132          0.0243          0.0268          0.0199          0.0242
+  r2           0.0072         -0.0109         -0.0383          0.0025         -0.0004

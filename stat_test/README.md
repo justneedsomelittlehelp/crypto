@@ -10,6 +10,8 @@ This folder filters candidates *before* they touch the real model.
 
 The methodology is documented in [`how_to_stat_test.md`](how_to_stat_test.md) — read it before running new tests.
 
+Parallel HMM macro-regime track: see [`HMM_LOG.md`](HMM_LOG.md) for the iteration trail and current frozen model. Frozen: hierarchical HMM (K_outer=2 × K_inner=[3,2], 5 composite states). Script: `hmm_hierarchical.py --k-outer 2 --k-inner 3,2`. BTC fwd20d variance reduction = 6.77%.
+
 ## The funnel (4 stages)
 
 | Stage | What | Cost | Artifact |

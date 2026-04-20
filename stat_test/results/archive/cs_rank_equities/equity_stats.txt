@@ -1,0 +1,17 @@
+Per-regime forward 20d log return (mean / count)
+
+
+SPY:
+  r0: mean fwd20d = +0.0064  (n=1066)
+  r1: mean fwd20d = +0.0080  (n=1403)
+  r2: mean fwd20d = +0.0085  (n=1247)
+
+QQQ:
+  r0: mean fwd20d = +0.0091  (n=1066)
+  r1: mean fwd20d = +0.0109  (n=1403)
+  r2: mean fwd20d = +0.0099  (n=1247)
+
+BTC:
+  r0: mean fwd20d = +0.0181  (n=1030)
+  r1: mean fwd20d = +0.0222  (n=1356)
+  r2: mean fwd20d = +0.0377  (n=1174)

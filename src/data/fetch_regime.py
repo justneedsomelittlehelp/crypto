@@ -147,10 +147,13 @@ def build_regime_daily(start: str, end: str, fred_key: str = None) -> pd.DataFra
     """Build daily regime features CSV."""
     # yfinance daily
     tickers = {
-        "vix":  "^VIX",
-        "dxy":  "DX-Y.NYB",
-        "gld":  "GLD",
-        "uso":  "USO",
+        "vix":   "^VIX",
+        "dxy":   "DX-Y.NYB",
+        "gld":   "GLD",
+        "uso":   "USO",
+        "cper":  "CPER",   # copper ETF (US Copper Index Fund)
+        "corn":  "CORN",   # corn ETF (Teucrium Corn Fund)
+        "soyb":  "SOYB",   # soybean ETF (Teucrium Soybean Fund)
     }
 
     frames = {}
@@ -173,14 +176,15 @@ def build_regime_daily(start: str, end: str, fred_key: str = None) -> pd.DataFra
     combined = combined.sort_index()
     combined = combined.ffill()
 
-    # Compute yield curve slope
+    # Compute yield curve slope; keep raw 2Y as an explicit rate feature
     if "dgs10" in combined.columns and "dgs2" in combined.columns:
         combined["yield_curve"] = combined["dgs10"] - combined["dgs2"]
+        combined = combined.rename(columns={"dgs2": "dgs2"})  # noop, be explicit
     else:
         combined["yield_curve"] = np.nan
 
-    # Drop raw yields (keep slope)
-    combined = combined.drop(columns=["dgs10", "dgs2"], errors="ignore")
+    # Drop 10Y level (captured in slope + 2Y)
+    combined = combined.drop(columns=["dgs10"], errors="ignore")
 
     # Fill daily grid
     daily_idx = pd.date_range(

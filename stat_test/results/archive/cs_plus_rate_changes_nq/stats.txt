@@ -1,0 +1,23 @@
+HMM: commodity CS ranks + 6m rate-change ranks, K=3, best seed=7, LL=-29,701.15
+Per-regime forward 20d log return (mean / count)
+
+
+NQ:
+  r0: mean fwd20d = +0.0130  (n=1664)
+  r1: mean fwd20d = +0.0043  (n=2192)
+  r2: mean fwd20d = +0.0114  (n=1126)
+
+SPY:
+  r0: mean fwd20d = +0.0115  (n=1245)
+  r1: mean fwd20d = +0.0028  (n=1601)
+  r2: mean fwd20d = +0.0114  (n=870)
+
+QQQ:
+  r0: mean fwd20d = +0.0160  (n=1245)
+  r1: mean fwd20d = +0.0037  (n=1601)
+  r2: mean fwd20d = +0.0132  (n=870)
+
+BTC:
+  r0: mean fwd20d = +0.0291  (n=1245)
+  r1: mean fwd20d = +0.0142  (n=1445)
+  r2: mean fwd20d = +0.0417  (n=870)

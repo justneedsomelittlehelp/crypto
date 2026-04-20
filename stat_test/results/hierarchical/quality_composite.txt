@@ -1,0 +1,108 @@
+Quality diagnostics for timeline: results/hierarchical/timeline.csv
+Regime column: composite  (unique values: [np.int64(0), np.int64(1), np.int64(2), np.int64(3), np.int64(4)])
+Panel: 2012-08-07 → 2026-04-17, n=5002
+Forward horizon: 20 trading days, log return
+
+★ = CI excludes 0 / pairwise significantly different at Bonferroni-adjusted α
+
+============================================================
+NQ=F
+============================================================
+ANOVA F = 8.52, p = 7.56e-07
+Variance reduction: 0.68%   (total var y = 0.00179)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0091  CI=[+0.0065, +0.0116]  n=749 ★
+  r1: mean=+0.0100  CI=[+0.0079, +0.0120]  n=986 ★
+  r2: mean=+0.0143  CI=[+0.0119, +0.0168]  n=887 ★
+  r3: mean=+0.0035  CI=[+0.0008, +0.0061]  n=1145 ★
+  r4: mean=+0.0088  CI=[+0.0061, +0.0116]  n=1215 ★
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/10):
+  r0 vs r1: t=-0.51  p=6.12e-01   
+  r0 vs r2: t=-2.76  p=5.87e-03   
+  r0 vs r3: t=+2.96  p=3.11e-03  ★
+  r0 vs r4: t=+0.16  p=8.70e-01   
+  r1 vs r2: t=-2.52  p=1.19e-02   
+  r1 vs r3: t=+3.72  p=2.06e-04  ★
+  r1 vs r4: t=+0.67  p=5.04e-01   
+  r2 vs r3: t=+5.65  p=1.80e-08  ★
+  r2 vs r4: t=+2.84  p=4.51e-03  ★
+  r3 vs r4: t=-2.72  p=6.56e-03   
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR=+12.17%  Sharpe=+0.67  exp=100%  (asset valid days=5002)
+  r0 :   CAGR= +1.41%  Sharpe=+0.19  exp=15.0%
+  r1 :   CAGR= +2.92%  Sharpe=+0.52  exp=19.7%
+  r2 :   CAGR= +3.16%  Sharpe=+0.45  exp=17.7%
+  r3 :   CAGR= +0.19%  Sharpe=+0.02  exp=23.0%
+  r4 :   CAGR= +3.98%  Sharpe=+0.42  exp=24.6%
+
+============================================================
+ES=F
+============================================================
+ANOVA F = 8.55, p = 7.11e-07
+Variance reduction: 0.68%   (total var y = 0.00124)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0080  CI=[+0.0059, +0.0102]  n=749 ★
+  r1: mean=+0.0086  CI=[+0.0071, +0.0103]  n=986 ★
+  r2: mean=+0.0092  CI=[+0.0070, +0.0116]  n=887 ★
+  r3: mean=+0.0014  CI=[-0.0006, +0.0036]  n=1145
+  r4: mean=+0.0058  CI=[+0.0035, +0.0081]  n=1215 ★
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/10):
+  r0 vs r1: t=-0.44  p=6.61e-01   
+  r0 vs r2: t=-0.71  p=4.79e-01   
+  r0 vs r3: t=+4.27  p=2.07e-05  ★
+  r0 vs r4: t=+1.40  p=1.63e-01   
+  r1 vs r2: t=-0.37  p=7.10e-01   
+  r1 vs r3: t=+5.14  p=2.99e-07  ★
+  r1 vs r4: t=+1.95  p=5.18e-02   
+  r2 vs r3: t=+4.69  p=2.97e-06  ★
+  r2 vs r4: t=+1.99  p=4.68e-02   
+  r3 vs r4: t=-2.71  p=6.79e-03   
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR= +8.52%  Sharpe=+0.58  exp=100%  (asset valid days=5002)
+  r0 :   CAGR= +0.84%  Sharpe=+0.12  exp=15.0%
+  r1 :   CAGR= +2.89%  Sharpe=+0.65  exp=19.7%
+  r2 :   CAGR= +1.86%  Sharpe=+0.30  exp=17.7%
+  r3 :   CAGR= +0.20%  Sharpe=+0.03  exp=23.0%
+  r4 :   CAGR= +2.48%  Sharpe=+0.35  exp=24.6%
+
+============================================================
+BTC
+============================================================
+ANOVA F = 64.54, p = 9.31e-53
+Variance reduction: 6.77%   (total var y = 0.02841)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0442  CI=[+0.0254, +0.0635]  n=343 ★
+  r1: mean=+0.1237  CI=[+0.1075, +0.1402]  n=419 ★
+  r2: mean=+0.0696  CI=[+0.0518, +0.0888]  n=438 ★
+  r3: mean=+0.0038  CI=[-0.0048, +0.0116]  n=1145
+  r4: mean=-0.0072  CI=[-0.0163, +0.0009]  n=1215
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/10):
+  r0 vs r1: t=-6.01  p=2.95e-09  ★
+  r0 vs r2: t=-1.85  p=6.43e-02   
+  r0 vs r3: t=+3.72  p=2.22e-04  ★
+  r0 vs r4: t=+4.71  p=3.27e-06  ★
+  r1 vs r2: t=+4.22  p=2.71e-05  ★
+  r1 vs r3: t=+12.41  p=8.06e-32  ★
+  r1 vs r4: t=+13.47  p=1.30e-36  ★
+  r2 vs r3: t=+6.37  p=3.73e-10  ★
+  r2 vs r4: t=+7.39  p=4.71e-13  ★
+  r3 vs r4: t=+1.79  p=7.34e-02   
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR=+39.45%  Sharpe=+0.58  exp=100%  (asset valid days=3580)
+  r0 :   CAGR=+10.59%  Sharpe=+0.45  exp=9.6%
+  r1 :   CAGR=+16.09%  Sharpe=+0.67  exp=11.7%
+  r2 :   CAGR= +5.71%  Sharpe=+0.26  exp=12.2%
+  r3 :   CAGR= -5.31%  Sharpe=-0.18  exp=32.1%
+  r4 :   CAGR= +8.51%  Sharpe=+0.27  exp=34.4%
