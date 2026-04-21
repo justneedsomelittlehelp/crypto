@@ -1,0 +1,68 @@
+Hierarchical HMM (global outer): outer(global macro, K=3) × inner(commodities, K=[5, 5, 5])
+Outer features: ['dxy_rn', 'credit_spread_rn', 'net_fed_liq_yoy_rn', 'global_m2_yoy_rn']
+Rank window: 756 trading days (~3y)
+Panel: 2012-08-07 → 2026-04-17, n=5002
+
+
+NQ=F — by OUTER state S:
+  S0: mean fwd20d = +0.0058  (n=2687)
+  S1: mean fwd20d = +0.0137  (n=1183)
+  S2: mean fwd20d = +0.0111  (n=1112)
+NQ=F — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0054  (n=178)
+  S0,z1: fwd20d = +0.0124  (n=725)
+  S0,z2: fwd20d = +0.0024  (n=506)
+  S0,z3: fwd20d = +0.0036  (n=711)
+  S0,z4: fwd20d = +0.0031  (n=567)
+  S1,z0: fwd20d = +0.0127  (n=394)
+  S1,z1: fwd20d = +0.0093  (n=161)
+  S1,z2: fwd20d = +0.0030  (n=155)
+  S1,z3: fwd20d = +0.0190  (n=181)
+  S1,z4: fwd20d = +0.0197  (n=292)
+  S2,z0: fwd20d = +0.0116  (n=129)
+  S2,z1: fwd20d = +0.0113  (n=260)
+  S2,z2: fwd20d = +0.0139  (n=198)
+  S2,z3: fwd20d = +0.0064  (n=331)
+  S2,z4: fwd20d = +0.0157  (n=194)
+
+ES=F — by OUTER state S:
+  S0: mean fwd20d = +0.0049  (n=2687)
+  S1: mean fwd20d = +0.0085  (n=1183)
+  S2: mean fwd20d = +0.0072  (n=1112)
+ES=F — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0034  (n=178)
+  S0,z1: fwd20d = +0.0095  (n=725)
+  S0,z2: fwd20d = +0.0030  (n=506)
+  S0,z3: fwd20d = +0.0028  (n=711)
+  S0,z4: fwd20d = +0.0039  (n=567)
+  S1,z0: fwd20d = +0.0112  (n=394)
+  S1,z1: fwd20d = +0.0075  (n=161)
+  S1,z2: fwd20d = -0.0042  (n=155)
+  S1,z3: fwd20d = +0.0144  (n=181)
+  S1,z4: fwd20d = +0.0086  (n=292)
+  S2,z0: fwd20d = +0.0052  (n=129)
+  S2,z1: fwd20d = +0.0094  (n=260)
+  S2,z2: fwd20d = +0.0060  (n=198)
+  S2,z3: fwd20d = +0.0062  (n=331)
+  S2,z4: fwd20d = +0.0086  (n=194)
+
+BTC — by OUTER state S:
+  S0: mean fwd20d = +0.0076  (n=1689)
+  S1: mean fwd20d = +0.0483  (n=1183)
+  S2: mean fwd20d = +0.0337  (n=688)
+BTC — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0243  (n=115)
+  S0,z1: fwd20d = +0.0287  (n=456)
+  S0,z2: fwd20d = -0.0019  (n=298)
+  S0,z3: fwd20d = -0.0019  (n=443)
+  S0,z4: fwd20d = -0.0044  (n=377)
+  S1,z0: fwd20d = +0.0386  (n=394)
+  S1,z1: fwd20d = +0.0360  (n=161)
+  S1,z2: fwd20d = +0.0417  (n=155)
+  S1,z3: fwd20d = +0.0977  (n=181)
+  S1,z4: fwd20d = +0.0410  (n=292)
+  S2,z0: fwd20d = +0.0377  (n=78)
+  S2,z1: fwd20d = +0.0878  (n=171)
+  S2,z2: fwd20d = +0.0575  (n=126)
+  S2,z3: fwd20d = -0.0285  (n=206)
+  S2,z4: fwd20d = +0.0358  (n=107)

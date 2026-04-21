@@ -1,0 +1,453 @@
+Quality diagnostics for timeline: /Users/taeho/Desktop/projects/crypto/stat_test/results/hierarchical_global_K3_555/timeline.csv
+Regime column: composite  (unique values: [np.int64(0), np.int64(1), np.int64(2), np.int64(3), np.int64(4), np.int64(5), np.int64(6), np.int64(7), np.int64(8), np.int64(9)]...)
+Panel: 2012-08-07 → 2026-04-17, n=5002
+Forward horizon: 20 trading days, log return
+
+★ = CI excludes 0 / pairwise significantly different at Bonferroni-adjusted α
+
+============================================================
+NQ=F
+============================================================
+ANOVA F = 6.23, p = 1.68e-12
+Variance reduction: 1.73%   (total var y = 0.00179)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0054  CI=[-0.0004, +0.0111]  n=178
+  r1: mean=+0.0124  CI=[+0.0096, +0.0152]  n=725 ★
+  r2: mean=+0.0024  CI=[-0.0015, +0.0062]  n=506
+  r3: mean=+0.0036  CI=[+0.0006, +0.0068]  n=711 ★
+  r4: mean=+0.0031  CI=[-0.0009, +0.0070]  n=567
+  r5: mean=+0.0127  CI=[+0.0086, +0.0168]  n=394 ★
+  r6: mean=+0.0093  CI=[+0.0022, +0.0163]  n=161 ★
+  r7: mean=+0.0030  CI=[-0.0058, +0.0118]  n=155
+  r8: mean=+0.0190  CI=[+0.0132, +0.0243]  n=181 ★
+  r9: mean=+0.0197  CI=[+0.0127, +0.0262]  n=292 ★
+  r10: mean=+0.0116  CI=[+0.0071, +0.0158]  n=129 ★
+  r11: mean=+0.0113  CI=[+0.0072, +0.0154]  n=260 ★
+  r12: mean=+0.0139  CI=[+0.0091, +0.0185]  n=198 ★
+  r13: mean=+0.0064  CI=[+0.0030, +0.0098]  n=331 ★
+  r14: mean=+0.0157  CI=[+0.0123, +0.0189]  n=194 ★
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/105):
+  r0 vs r1: t=-2.19  p=2.92e-02   
+  r0 vs r2: t=+0.87  p=3.85e-01   
+  r0 vs r3: t=+0.56  p=5.75e-01   
+  r0 vs r4: t=+0.67  p=5.01e-01   
+  r0 vs r5: t=-2.03  p=4.27e-02   
+  r0 vs r6: t=-0.86  p=3.93e-01   
+  r0 vs r7: t=+0.45  p=6.56e-01   
+  r0 vs r8: t=-3.39  p=7.71e-04   
+  r0 vs r9: t=-3.10  p=2.05e-03   
+  r0 vs r10: t=-1.70  p=8.99e-02   
+  r0 vs r11: t=-1.64  p=1.01e-01   
+  r0 vs r12: t=-2.28  p=2.34e-02   
+  r0 vs r13: t=-0.29  p=7.71e-01   
+  r0 vs r14: t=-3.10  p=2.13e-03   
+  r1 vs r2: t=+4.17  p=3.35e-05  ★
+  r1 vs r3: t=+4.17  p=3.19e-05  ★
+  r1 vs r4: t=+3.82  p=1.42e-04  ★
+  r1 vs r5: t=-0.10  p=9.17e-01   
+  r1 vs r6: t=+0.82  p=4.10e-01   
+  r1 vs r7: t=+1.95  p=5.28e-02   
+  r1 vs r8: t=-2.09  p=3.72e-02   
+  r1 vs r9: t=-1.87  p=6.17e-02   
+  r1 vs r10: t=+0.34  p=7.36e-01   
+  r1 vs r11: t=+0.45  p=6.55e-01   
+  r1 vs r12: t=-0.53  p=6.00e-01   
+  r1 vs r13: t=+2.68  p=7.44e-03   
+  r1 vs r14: t=-1.49  p=1.36e-01   
+  r2 vs r3: t=-0.47  p=6.37e-01   
+  r2 vs r4: t=-0.24  p=8.14e-01   
+  r2 vs r5: t=-3.56  p=3.97e-04  ★
+  r2 vs r6: t=-1.71  p=8.75e-02   
+  r2 vs r7: t=-0.12  p=9.07e-01   
+  r2 vs r8: t=-4.88  p=1.57e-06  ★
+  r2 vs r9: t=-4.23  p=2.86e-05  ★
+  r2 vs r10: t=-3.13  p=1.90e-03   
+  r2 vs r11: t=-3.09  p=2.12e-03   
+  r2 vs r12: t=-3.75  p=2.00e-04  ★
+  r2 vs r13: t=-1.53  p=1.27e-01   
+  r2 vs r14: t=-5.19  p=2.85e-07  ★
+  r3 vs r4: t=+0.21  p=8.37e-01   
+  r3 vs r5: t=-3.42  p=6.49e-04   
+  r3 vs r6: t=-1.48  p=1.40e-01   
+  r3 vs r7: t=+0.12  p=9.04e-01   
+  r3 vs r8: t=-4.81  p=2.34e-06  ★
+  r3 vs r9: t=-4.10  p=4.99e-05  ★
+  r3 vs r10: t=-2.96  p=3.36e-03   
+  r3 vs r11: t=-2.91  p=3.72e-03   
+  r3 vs r12: t=-3.62  p=3.30e-04  ★
+  r3 vs r13: t=-1.20  p=2.32e-01   
+  r3 vs r14: t=-5.28  p=1.87e-07  ★
+  r4 vs r5: t=-3.28  p=1.06e-03   
+  r4 vs r6: t=-1.54  p=1.25e-01   
+  r4 vs r7: t=+0.01  p=9.89e-01   
+  r4 vs r8: t=-4.64  p=4.75e-06  ★
+  r4 vs r9: t=-4.04  p=6.28e-05  ★
+  r4 vs r10: t=-2.87  p=4.40e-03   
+  r4 vs r11: t=-2.82  p=4.96e-03   
+  r4 vs r12: t=-3.49  p=5.23e-04   
+  r4 vs r13: t=-1.26  p=2.10e-01   
+  r4 vs r14: t=-4.85  p=1.55e-06  ★
+  r5 vs r6: t=+0.82  p=4.10e-01   
+  r5 vs r7: t=+1.90  p=5.85e-02   
+  r5 vs r8: t=-1.78  p=7.51e-02   
+  r5 vs r9: t=-1.67  p=9.65e-02   
+  r5 vs r10: t=+0.38  p=7.08e-01   
+  r5 vs r11: t=+0.47  p=6.40e-01   
+  r5 vs r12: t=-0.37  p=7.12e-01   
+  r5 vs r13: t=+2.28  p=2.29e-02   
+  r5 vs r14: t=-1.11  p=2.69e-01   
+  r6 vs r7: t=+1.08  p=2.79e-01   
+  r6 vs r8: t=-2.16  p=3.19e-02   
+  r6 vs r9: t=-2.06  p=3.99e-02   
+  r6 vs r10: t=-0.54  p=5.88e-01   
+  r6 vs r11: t=-0.48  p=6.29e-01   
+  r6 vs r12: t=-1.08  p=2.81e-01   
+  r6 vs r13: t=+0.74  p=4.60e-01   
+  r6 vs r14: t=-1.64  p=1.01e-01   
+  r7 vs r8: t=-2.96  p=3.39e-03   
+  r7 vs r9: t=-2.85  p=4.71e-03   
+  r7 vs r10: t=-1.67  p=9.61e-02   
+  r7 vs r11: t=-1.63  p=1.05e-01   
+  r7 vs r12: t=-2.09  p=3.74e-02   
+  r7 vs r13: t=-0.69  p=4.92e-01   
+  r7 vs r14: t=-2.58  p=1.05e-02   
+  r8 vs r9: t=-0.15  p=8.78e-01   
+  r8 vs r10: t=+2.10  p=3.67e-02   
+  r8 vs r11: t=+2.19  p=2.88e-02   
+  r8 vs r12: t=+1.39  p=1.64e-01   
+  r8 vs r13: t=+3.83  p=1.54e-04  ★
+  r8 vs r14: t=+1.00  p=3.16e-01   
+  r9 vs r10: t=+1.93  p=5.42e-02   
+  r9 vs r11: t=+2.01  p=4.52e-02   
+  r9 vs r12: t=+1.35  p=1.79e-01   
+  r9 vs r13: t=+3.32  p=9.67e-04   
+  r9 vs r14: t=+1.00  p=3.18e-01   
+  r10 vs r11: t=+0.09  p=9.32e-01   
+  r10 vs r12: t=-0.72  p=4.70e-01   
+  r10 vs r13: t=+1.84  p=6.62e-02   
+  r10 vs r14: t=-1.51  p=1.32e-01   
+  r11 vs r12: t=-0.82  p=4.15e-01   
+  r11 vs r13: t=+1.78  p=7.56e-02   
+  r11 vs r14: t=-1.63  p=1.03e-01   
+  r12 vs r13: t=+2.55  p=1.13e-02   
+  r12 vs r14: t=-0.63  p=5.28e-01   
+  r13 vs r14: t=-3.85  p=1.32e-04  ★
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR=+12.17%  Sharpe=+0.67  exp=100%  (asset valid days=5002)
+  r0 :   CAGR= +0.53%  Sharpe=+0.19  exp=3.6%
+  r1 :   CAGR= -0.10%  Sharpe=-0.02  exp=14.5%
+  r2 :   CAGR= +0.81%  Sharpe=+0.14  exp=10.1%
+  r3 :   CAGR= +0.88%  Sharpe=+0.16  exp=14.2%
+  r4 :   CAGR= +1.59%  Sharpe=+0.24  exp=11.3%
+  r5 :   CAGR= +0.42%  Sharpe=+0.08  exp=8.0%
+  r6 :   CAGR= +0.99%  Sharpe=+0.32  exp=3.4%
+  r7 :   CAGR= -0.45%  Sharpe=-0.08  exp=3.1%
+  r8 :   CAGR= +2.14%  Sharpe=+0.45  exp=3.7%
+  r9 :   CAGR= +1.02%  Sharpe=+0.20  exp=5.9%
+  r10:   CAGR= +0.39%  Sharpe=+0.20  exp=2.6%
+  r11:   CAGR= +0.11%  Sharpe=+0.04  exp=5.2%
+  r12:   CAGR= +0.59%  Sharpe=+0.27  exp=4.0%
+  r13:   CAGR= +2.34%  Sharpe=+0.70  exp=6.6%
+  r14:   CAGR= +0.32%  Sharpe=+0.15  exp=3.9%
+
+============================================================
+ES=F
+============================================================
+ANOVA F = 4.07, p = 4.30e-07
+Variance reduction: 1.13%   (total var y = 0.00124)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0034  CI=[-0.0010, +0.0077]  n=178
+  r1: mean=+0.0095  CI=[+0.0075, +0.0116]  n=725 ★
+  r2: mean=+0.0030  CI=[+0.0001, +0.0059]  n=506 ★
+  r3: mean=+0.0028  CI=[+0.0003, +0.0053]  n=711 ★
+  r4: mean=+0.0039  CI=[+0.0007, +0.0071]  n=567 ★
+  r5: mean=+0.0112  CI=[+0.0076, +0.0148]  n=394 ★
+  r6: mean=+0.0075  CI=[+0.0024, +0.0128]  n=161 ★
+  r7: mean=-0.0042  CI=[-0.0130, +0.0042]  n=155
+  r8: mean=+0.0144  CI=[+0.0088, +0.0198]  n=181 ★
+  r9: mean=+0.0086  CI=[+0.0014, +0.0149]  n=292 ★
+  r10: mean=+0.0052  CI=[+0.0015, +0.0085]  n=129 ★
+  r11: mean=+0.0094  CI=[+0.0064, +0.0126]  n=260 ★
+  r12: mean=+0.0060  CI=[+0.0025, +0.0096]  n=198 ★
+  r13: mean=+0.0062  CI=[+0.0039, +0.0085]  n=331 ★
+  r14: mean=+0.0086  CI=[+0.0055, +0.0116]  n=194 ★
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/105):
+  r0 vs r1: t=-2.51  p=1.27e-02   
+  r0 vs r2: t=+0.16  p=8.74e-01   
+  r0 vs r3: t=+0.24  p=8.13e-01   
+  r0 vs r4: t=-0.19  p=8.53e-01   
+  r0 vs r5: t=-2.68  p=7.74e-03   
+  r0 vs r6: t=-1.20  p=2.32e-01   
+  r0 vs r7: t=+1.52  p=1.29e-01   
+  r0 vs r8: t=-3.17  p=1.65e-03   
+  r0 vs r9: t=-1.23  p=2.19e-01   
+  r0 vs r10: t=-0.62  p=5.37e-01   
+  r0 vs r11: t=-2.22  p=2.74e-02   
+  r0 vs r12: t=-0.89  p=3.72e-01   
+  r0 vs r13: t=-1.12  p=2.63e-01   
+  r0 vs r14: t=-1.91  p=5.75e-02   
+  r1 vs r2: t=+3.56  p=3.93e-04  ★
+  r1 vs r3: t=+4.09  p=4.57e-05  ★
+  r1 vs r4: t=+2.86  p=4.30e-03   
+  r1 vs r5: t=-0.76  p=4.50e-01   
+  r1 vs r6: t=+0.72  p=4.69e-01   
+  r1 vs r7: t=+2.99  p=3.23e-03   
+  r1 vs r8: t=-1.69  p=9.17e-02   
+  r1 vs r9: t=+0.27  p=7.91e-01   
+  r1 vs r10: t=+2.10  p=3.66e-02   
+  r1 vs r11: t=+0.07  p=9.45e-01   
+  r1 vs r12: t=+1.68  p=9.44e-02   
+  r1 vs r13: t=+2.03  p=4.27e-02   
+  r1 vs r14: t=+0.48  p=6.32e-01   
+  r2 vs r3: t=+0.09  p=9.28e-01   
+  r2 vs r4: t=-0.42  p=6.76e-01   
+  r2 vs r5: t=-3.38  p=7.52e-04   
+  r2 vs r6: t=-1.50  p=1.36e-01   
+  r2 vs r7: t=+1.52  p=1.30e-01   
+  r2 vs r8: t=-3.71  p=2.48e-04  ★
+  r2 vs r9: t=-1.44  p=1.50e-01   
+  r2 vs r10: t=-0.93  p=3.53e-01   
+  r2 vs r11: t=-2.94  p=3.37e-03   
+  r2 vs r12: t=-1.26  p=2.10e-01   
+  r2 vs r13: t=-1.67  p=9.50e-02   
+  r2 vs r14: t=-2.55  p=1.12e-02   
+  r3 vs r4: t=-0.53  p=5.93e-01   
+  r3 vs r5: t=-3.68  p=2.53e-04  ★
+  r3 vs r6: t=-1.62  p=1.07e-01   
+  r3 vs r7: t=+1.51  p=1.34e-01   
+  r3 vs r8: t=-3.91  p=1.18e-04  ★
+  r3 vs r9: t=-1.52  p=1.28e-01   
+  r3 vs r10: t=-1.08  p=2.83e-01   
+  r3 vs r11: t=-3.27  p=1.15e-03   
+  r3 vs r12: t=-1.42  p=1.57e-01   
+  r3 vs r13: t=-1.95  p=5.18e-02   
+  r3 vs r14: t=-2.83  p=4.82e-03   
+  r4 vs r5: t=-2.89  p=4.00e-03   
+  r4 vs r6: t=-1.16  p=2.48e-01   
+  r4 vs r7: t=+1.70  p=9.06e-02   
+  r4 vs r8: t=-3.33  p=9.76e-04   
+  r4 vs r9: t=-1.18  p=2.38e-01   
+  r4 vs r10: t=-0.51  p=6.10e-01   
+  r4 vs r11: t=-2.40  p=1.66e-02   
+  r4 vs r12: t=-0.83  p=4.07e-01   
+  r4 vs r13: t=-1.13  p=2.61e-01   
+  r4 vs r14: t=-2.03  p=4.28e-02   
+  r5 vs r6: t=+1.14  p=2.54e-01   
+  r5 vs r7: t=+3.16  p=1.79e-03   
+  r5 vs r8: t=-0.99  p=3.23e-01   
+  r5 vs r9: t=+0.65  p=5.14e-01   
+  r5 vs r10: t=+2.31  p=2.16e-02   
+  r5 vs r11: t=+0.72  p=4.73e-01   
+  r5 vs r12: t=+1.97  p=4.94e-02   
+  r5 vs r13: t=+2.18  p=2.93e-02   
+  r5 vs r14: t=+1.03  p=3.03e-01   
+  r6 vs r7: t=+2.26  p=2.49e-02   
+  r6 vs r8: t=-1.85  p=6.49e-02   
+  r6 vs r9: t=-0.24  p=8.10e-01   
+  r6 vs r10: t=+0.74  p=4.62e-01   
+  r6 vs r11: t=-0.63  p=5.32e-01   
+  r6 vs r12: t=+0.48  p=6.34e-01   
+  r6 vs r13: t=+0.44  p=6.64e-01   
+  r6 vs r14: t=-0.36  p=7.16e-01   
+  r7 vs r8: t=-3.57  p=4.28e-04  ★
+  r7 vs r9: t=-2.23  p=2.64e-02   
+  r7 vs r10: t=-1.94  p=5.37e-02   
+  r7 vs r11: t=-2.87  p=4.61e-03   
+  r7 vs r12: t=-2.10  p=3.68e-02   
+  r7 vs r13: t=-2.25  p=2.58e-02   
+  r7 vs r14: t=-2.69  p=7.73e-03   
+  r8 vs r9: t=+1.32  p=1.87e-01   
+  r8 vs r10: t=+2.87  p=4.44e-03   
+  r8 vs r11: t=+1.61  p=1.08e-01   
+  r8 vs r12: t=+2.59  p=9.92e-03   
+  r8 vs r13: t=+2.77  p=6.06e-03   
+  r8 vs r14: t=+1.86  p=6.45e-02   
+  r9 vs r10: t=+0.85  p=3.94e-01   
+  r9 vs r11: t=-0.22  p=8.26e-01   
+  r9 vs r12: t=+0.64  p=5.20e-01   
+  r9 vs r13: t=+0.62  p=5.38e-01   
+  r9 vs r14: t=-0.02  p=9.88e-01   
+  r10 vs r11: t=-1.78  p=7.65e-02   
+  r10 vs r12: t=-0.32  p=7.52e-01   
+  r10 vs r13: t=-0.50  p=6.21e-01   
+  r10 vs r14: t=-1.43  p=1.54e-01   
+  r11 vs r12: t=+1.41  p=1.58e-01   
+  r11 vs r13: t=+1.58  p=1.14e-01   
+  r11 vs r14: t=+0.35  p=7.25e-01   
+  r12 vs r13: t=-0.12  p=9.05e-01   
+  r12 vs r14: t=-1.08  p=2.82e-01   
+  r13 vs r14: t=-1.17  p=2.44e-01   
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR= +8.52%  Sharpe=+0.58  exp=100%  (asset valid days=5002)
+  r0 :   CAGR= +0.51%  Sharpe=+0.23  exp=3.6%
+  r1 :   CAGR= -0.37%  Sharpe=-0.08  exp=14.5%
+  r2 :   CAGR= +0.97%  Sharpe=+0.22  exp=10.1%
+  r3 :   CAGR= +0.68%  Sharpe=+0.16  exp=14.2%
+  r4 :   CAGR= +1.33%  Sharpe=+0.26  exp=11.3%
+  r5 :   CAGR= -0.05%  Sharpe=-0.01  exp=8.0%
+  r6 :   CAGR= +0.91%  Sharpe=+0.38  exp=3.4%
+  r7 :   CAGR= -0.81%  Sharpe=-0.17  exp=3.1%
+  r8 :   CAGR= +2.46%  Sharpe=+0.58  exp=3.7%
+  r9 :   CAGR= +0.17%  Sharpe=+0.04  exp=5.9%
+  r10:   CAGR= +0.06%  Sharpe=+0.04  exp=2.6%
+  r11:   CAGR= +0.11%  Sharpe=+0.06  exp=5.2%
+  r12:   CAGR= +0.43%  Sharpe=+0.25  exp=4.0%
+  r13:   CAGR= +1.87%  Sharpe=+0.70  exp=6.6%
+  r14:   CAGR= -0.04%  Sharpe=-0.02  exp=3.9%
+
+============================================================
+BTC
+============================================================
+ANOVA F = 8.94, p = 1.45e-19
+Variance reduction: 3.41%   (total var y = 0.02841)
+
+Per-regime fwd20d mean (bootstrap 95% CI, B=2000):
+  r0: mean=+0.0243  CI=[+0.0039, +0.0446]  n=115 ★
+  r1: mean=+0.0287  CI=[+0.0158, +0.0414]  n=456 ★
+  r2: mean=-0.0019  CI=[-0.0162, +0.0128]  n=298
+  r3: mean=-0.0019  CI=[-0.0156, +0.0127]  n=443
+  r4: mean=-0.0044  CI=[-0.0213, +0.0106]  n=377
+  r5: mean=+0.0386  CI=[+0.0258, +0.0507]  n=394 ★
+  r6: mean=+0.0360  CI=[+0.0176, +0.0558]  n=161 ★
+  r7: mean=+0.0417  CI=[+0.0173, +0.0662]  n=155 ★
+  r8: mean=+0.0977  CI=[+0.0750, +0.1195]  n=181 ★
+  r9: mean=+0.0410  CI=[+0.0181, +0.0644]  n=292 ★
+  r10: mean=+0.0377  CI=[-0.0095, +0.0881]  n=78
+  r11: mean=+0.0878  CI=[+0.0511, +0.1229]  n=171 ★
+  r12: mean=+0.0575  CI=[+0.0139, +0.1023]  n=126 ★
+  r13: mean=-0.0285  CI=[-0.0550, +0.0003]  n=206
+  r14: mean=+0.0358  CI=[-0.0019, +0.0713]  n=107
+
+Pairwise Welch t-test on fwd20d means (Bonferroni α=0.05/105):
+  r0 vs r1: t=-0.34  p=7.34e-01   
+  r0 vs r2: t=+2.01  p=4.56e-02   
+  r0 vs r3: t=+2.04  p=4.29e-02   
+  r0 vs r4: t=+2.10  p=3.70e-02   
+  r0 vs r5: t=-1.13  p=2.58e-01   
+  r0 vs r6: t=-0.79  p=4.33e-01   
+  r0 vs r7: t=-1.05  p=2.96e-01   
+  r0 vs r8: t=-4.77  p=2.97e-06  ★
+  r0 vs r9: t=-1.04  p=3.01e-01   
+  r0 vs r10: t=-0.51  p=6.14e-01   
+  r0 vs r11: t=-2.99  p=3.02e-03   
+  r0 vs r12: t=-1.36  p=1.77e-01   
+  r0 vs r13: t=+2.92  p=3.78e-03   
+  r0 vs r14: t=-0.53  p=5.96e-01   
+  r1 vs r2: t=+3.07  p=2.21e-03   
+  r1 vs r3: t=+3.15  p=1.69e-03   
+  r1 vs r4: t=+3.06  p=2.29e-03   
+  r1 vs r5: t=-1.07  p=2.86e-01   
+  r1 vs r6: t=-0.60  p=5.48e-01   
+  r1 vs r7: t=-0.91  p=3.62e-01   
+  r1 vs r8: t=-5.37  p=1.50e-07  ★
+  r1 vs r9: t=-0.90  p=3.68e-01   
+  r1 vs r10: t=-0.36  p=7.19e-01   
+  r1 vs r11: t=-3.04  p=2.65e-03   
+  r1 vs r12: t=-1.26  p=2.11e-01   
+  r1 vs r13: t=+3.57  p=4.16e-04  ★
+  r1 vs r14: t=-0.36  p=7.20e-01   
+  r2 vs r3: t=-0.00  p=9.96e-01   
+  r2 vs r4: t=+0.23  p=8.21e-01   
+  r2 vs r5: t=-4.15  p=3.76e-05  ★
+  r2 vs r6: t=-3.02  p=2.70e-03   
+  r2 vs r7: t=-3.00  p=2.99e-03   
+  r2 vs r8: t=-7.56  p=3.77e-13  ★
+  r2 vs r9: t=-3.07  p=2.24e-03   
+  r2 vs r10: t=-1.57  p=1.19e-01   
+  r2 vs r11: t=-4.56  p=8.33e-06  ★
+  r2 vs r12: t=-2.57  p=1.12e-02   
+  r2 vs r13: t=+1.63  p=1.03e-01   
+  r2 vs r14: t=-1.88  p=6.26e-02   
+  r3 vs r4: t=+0.24  p=8.14e-01   
+  r3 vs r5: t=-4.26  p=2.26e-05  ★
+  r3 vs r6: t=-3.07  p=2.32e-03   
+  r3 vs r7: t=-3.03  p=2.69e-03   
+  r3 vs r8: t=-7.67  p=1.85e-13  ★
+  r3 vs r9: t=-3.11  p=1.98e-03   
+  r3 vs r10: t=-1.58  p=1.18e-01   
+  r3 vs r11: t=-4.59  p=7.44e-06  ★
+  r3 vs r12: t=-2.58  p=1.09e-02   
+  r3 vs r13: t=+1.65  p=9.93e-02   
+  r3 vs r14: t=-1.89  p=6.14e-02   
+  r4 vs r5: t=-4.04  p=5.82e-05  ★
+  r4 vs r6: t=-3.06  p=2.41e-03   
+  r4 vs r7: t=-3.04  p=2.54e-03   
+  r4 vs r8: t=-7.38  p=9.40e-13  ★
+  r4 vs r9: t=-3.11  p=1.95e-03   
+  r4 vs r10: t=-1.65  p=1.02e-01   
+  r4 vs r11: t=-4.58  p=7.24e-06  ★
+  r4 vs r12: t=-2.63  p=9.30e-03   
+  r4 vs r13: t=+1.43  p=1.54e-01   
+  r4 vs r14: t=-1.96  p=5.19e-02   
+  r5 vs r6: t=+0.22  p=8.28e-01   
+  r5 vs r7: t=-0.22  p=8.28e-01   
+  r5 vs r8: t=-4.65  p=4.94e-06  ★
+  r5 vs r9: t=-0.17  p=8.62e-01   
+  r5 vs r10: t=+0.04  p=9.71e-01   
+  r5 vs r11: t=-2.54  p=1.17e-02   
+  r5 vs r12: t=-0.82  p=4.11e-01   
+  r5 vs r13: t=+4.22  p=3.23e-05  ★
+  r5 vs r14: t=+0.14  p=8.87e-01   
+  r6 vs r7: t=-0.35  p=7.25e-01   
+  r6 vs r8: t=-4.13  p=4.60e-05  ★
+  r6 vs r9: t=-0.32  p=7.51e-01   
+  r6 vs r10: t=-0.06  p=9.48e-01   
+  r6 vs r11: t=-2.48  p=1.37e-02   
+  r6 vs r12: t=-0.89  p=3.76e-01   
+  r6 vs r13: t=+3.64  p=3.17e-04  ★
+  r6 vs r14: t=+0.01  p=9.93e-01   
+  r7 vs r8: t=-3.36  p=8.73e-04   
+  r7 vs r9: t=+0.04  p=9.67e-01   
+  r7 vs r10: t=+0.15  p=8.83e-01   
+  r7 vs r11: t=-2.08  p=3.82e-02   
+  r7 vs r12: t=-0.62  p=5.33e-01   
+  r7 vs r13: t=+3.65  p=2.96e-04  ★
+  r7 vs r14: t=+0.26  p=7.94e-01   
+  r8 vs r9: t=+3.51  p=4.88e-04   
+  r8 vs r10: t=+2.27  p=2.53e-02   
+  r8 vs r11: t=+0.46  p=6.45e-01   
+  r8 vs r12: t=+1.64  p=1.03e-01   
+  r8 vs r13: t=+6.94  p=1.77e-11  ★
+  r8 vs r14: t=+2.86  p=4.81e-03   
+  r9 vs r10: t=+0.12  p=9.03e-01   
+  r9 vs r11: t=-2.15  p=3.21e-02   
+  r9 vs r12: t=-0.66  p=5.09e-01   
+  r9 vs r13: t=+3.70  p=2.41e-04  ★
+  r9 vs r14: t=+0.23  p=8.16e-01   
+  r10 vs r11: t=-1.66  p=9.88e-02   
+  r10 vs r12: t=-0.61  p=5.44e-01   
+  r10 vs r13: t=+2.35  p=2.01e-02   
+  r10 vs r14: t=+0.06  p=9.51e-01   
+  r11 vs r12: t=+1.06  p=2.89e-01   
+  r11 vs r13: t=+4.99  p=9.83e-07  ★
+  r11 vs r14: t=+1.99  p=4.75e-02   
+  r12 vs r13: t=+3.27  p=1.26e-03   
+  r12 vs r14: t=+0.75  p=4.53e-01   
+  r13 vs r14: t=-2.71  p=7.15e-03   
+
+Strategy: long when regime == r, else flat:
+  (buy-and-hold reference)
+  B&H:   CAGR=+39.45%  Sharpe=+0.58  exp=100%  (asset valid days=3580)
+  r0 :   CAGR= +0.37%  Sharpe=+0.05  exp=3.2%
+  r1 :   CAGR= -4.77%  Sharpe=-0.27  exp=12.7%
+  r2 :   CAGR= +0.38%  Sharpe=+0.03  exp=8.3%
+  r3 :   CAGR= +9.68%  Sharpe=+0.53  exp=12.4%
+  r4 :   CAGR= +0.15%  Sharpe=+0.01  exp=10.5%
+  r5 :   CAGR= +5.34%  Sharpe=+0.30  exp=11.1%
+  r6 :   CAGR= -1.06%  Sharpe=-0.13  exp=4.8%
+  r7 :   CAGR= +2.83%  Sharpe=+0.16  exp=4.4%
+  r8 :   CAGR= +7.91%  Sharpe=+0.68  exp=5.1%
+  r9 :   CAGR= +6.54%  Sharpe=+0.47  exp=8.2%
+  r10:   CAGR= +4.01%  Sharpe=+0.36  exp=2.2%
+  r11:   CAGR= +4.72%  Sharpe=+0.27  exp=4.8%
+  r12:   CAGR= -0.26%  Sharpe=-0.02  exp=3.5%
+  r13:   CAGR= +2.18%  Sharpe=+0.14  exp=5.8%
+  r14:   CAGR= -3.24%  Sharpe=-0.24  exp=3.0%

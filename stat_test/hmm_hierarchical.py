@@ -1,5 +1,8 @@
-# STATUS: LIVE — canonical HMM macro-regime model. See HMM_LOG.md.
-# Frozen config: --k-outer 2 --k-inner 3,2. Results: results/hierarchical/.
+# STATUS: SUPERSEDED (2026-04-20) — see hmm_hierarchical_global.py for the new
+# canonical HMM. This script is kept live because (a) the previous frozen run
+# lives at results/hierarchical/, (b) hmm_compare_frozen_vs_global.py imports
+# build_rate_levels from here for apples-to-apples comparison.
+# Previous frozen config: --k-outer 2 --k-inner 3,2. See HMM_LOG.md.
 """Hierarchical HMM: slow rate-level outer × fast commodity-CS-rank inner.
 
 Outer (slow, structural macro):

@@ -1,0 +1,50 @@
+Hierarchical HMM (global outer): outer(global macro, K=3) × inner(commodities, K=[3, 3, 3])
+Outer features: ['dxy_rn', 'credit_spread_rn', 'net_fed_liq_yoy_rn', 'global_m2_yoy_rn']
+Rank window: 756 trading days (~3y)
+Panel: 2012-08-07 → 2026-04-17, n=5002
+
+
+NQ=F — by OUTER state S:
+  S0: mean fwd20d = +0.0058  (n=2687)
+  S1: mean fwd20d = +0.0137  (n=1183)
+  S2: mean fwd20d = +0.0111  (n=1112)
+NQ=F — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0012  (n=1070)
+  S0,z1: fwd20d = +0.0086  (n=827)
+  S0,z2: fwd20d = +0.0091  (n=790)
+  S1,z0: fwd20d = +0.0127  (n=394)
+  S1,z1: fwd20d = +0.0157  (n=367)
+  S1,z2: fwd20d = +0.0128  (n=422)
+  S2,z0: fwd20d = +0.0073  (n=324)
+  S2,z1: fwd20d = +0.0144  (n=524)
+  S2,z2: fwd20d = +0.0092  (n=264)
+
+ES=F — by OUTER state S:
+  S0: mean fwd20d = +0.0049  (n=2687)
+  S1: mean fwd20d = +0.0085  (n=1183)
+  S2: mean fwd20d = +0.0072  (n=1112)
+ES=F — by COMPOSITE (S, z):
+  S0,z0: fwd20d = +0.0017  (n=1070)
+  S0,z1: fwd20d = +0.0058  (n=827)
+  S0,z2: fwd20d = +0.0084  (n=790)
+  S1,z0: fwd20d = +0.0112  (n=394)
+  S1,z1: fwd20d = +0.0102  (n=367)
+  S1,z2: fwd20d = +0.0046  (n=422)
+  S2,z0: fwd20d = +0.0049  (n=324)
+  S2,z1: fwd20d = +0.0087  (n=524)
+  S2,z2: fwd20d = +0.0072  (n=264)
+
+BTC — by OUTER state S:
+  S0: mean fwd20d = +0.0076  (n=1689)
+  S1: mean fwd20d = +0.0483  (n=1183)
+  S2: mean fwd20d = +0.0337  (n=688)
+BTC — by COMPOSITE (S, z):
+  S0,z0: fwd20d = -0.0028  (n=638)
+  S0,z1: fwd20d = +0.0142  (n=524)
+  S0,z2: fwd20d = +0.0135  (n=527)
+  S1,z0: fwd20d = +0.0386  (n=394)
+  S1,z1: fwd20d = +0.0624  (n=367)
+  S1,z2: fwd20d = +0.0450  (n=422)
+  S2,z0: fwd20d = +0.0235  (n=200)
+  S2,z1: fwd20d = +0.0632  (n=328)
+  S2,z2: fwd20d = -0.0140  (n=160)

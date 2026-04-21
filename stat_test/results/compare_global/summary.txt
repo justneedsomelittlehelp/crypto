@@ -1,0 +1,16 @@
+
+=== K3_333 (K_inner=[3, 3, 3]) ===
+  # states: 9
+  mean ARI: 0.411
+  min ARI:  0.233
+  BTC VR (composite): 1.98%
+  BTC VR per state:   0.220%
+  Short-dwell (<4d): 0 / 9
+
+=== K3_555 (K_inner=[5, 5, 5]) ===
+  # states: 15
+  mean ARI: 0.456
+  min ARI:  0.366
+  BTC VR (composite): 3.45%
+  BTC VR per state:   0.230%
+  Short-dwell (<4d): 6 / 15

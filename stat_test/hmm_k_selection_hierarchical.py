@@ -1,5 +1,8 @@
-# STATUS: LIVE — K-selection diagnostic for the hierarchical HMM.
-# Recommends K_outer=2, K_inner_S0=3, K_inner_S1=2. Results: results/k_selection_hier/.
+# STATUS: SUPERSEDED (2026-04-20) by hmm_k_selection_hierarchical_global.py.
+# Kept live because the new K-selection script imports `sweep` and
+# `build_btc_fwd` from here. Historical recommendation: K_outer=2,
+# K_inner=[3,2] — superseded by K_outer=3, K_inner=[5,5,5] under the
+# new global-outer feature set.
 """K-selection for the hierarchical HMM, per layer.
 
 Outer layer (rate-level panel):
